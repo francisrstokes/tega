@@ -53,7 +53,7 @@ export type ByteArray = Uint8Array | Int8Array;
 
 export type InlineBytes = { type: 'inlineBytes', bytes: ByteArray; };
 export type MoveTo = { type: 'moveTo', address: number; };
-export type CompoundOperation = { type: CompoundOperation, operations: AssemblerOperation[]; };
+export type CompoundOperation = { type: 'compound', operations: AssemblerOperation[]; };
 
 export type AssemblerOperation =
   | BaseSymbolReference

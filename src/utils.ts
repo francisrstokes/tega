@@ -10,7 +10,9 @@ import {
   InlineBytes,
   MoveTo,
   SizeOfReference,
-  ImmediateKey
+  ImmediateKey,
+  AssemblerOperation,
+  CompoundOperation
 } from "./types";
 
 export const u8 = (value: number): U8Imm => ({ type: ImmediateKey.u8imm, value });
@@ -27,3 +29,29 @@ export const sizeOf = (symbolA: BaseSymbolReference, symbolB: BaseSymbolReferenc
   symbolA,
   symbolB
 });
+
+
+export type Subroutine = {
+  label: BaseSymbolReference;
+  endLabel: BaseSymbolReference;
+  size: SizeOfReference;
+  subroutine: CompoundOperation;
+}
+export const subroutine = (
+  name: string,
+  getOperations: (symbols: Omit<Subroutine, 'subroutine'>) => AssemblerOperation[]
+): Subroutine => {
+  const label = symbol(name);
+  const endLabel = symbol(`${name}_end`);
+  const size = sizeOf(label, endLabel);
+  return {
+    label,
+    endLabel,
+    size,
+    subroutine: { type: 'compound', operations: [
+      label,
+      ...getOperations({ label, endLabel, size }),
+      endLabel
+    ] }
+  };
+};
