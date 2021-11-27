@@ -1,6 +1,6 @@
-import { LCDCF_BGON, LCDCF_ON, rBGP, rLCDC, rLY, rNR52 } from "./hardware-inc";
-import { CP, DEC, INC, JP, LD, OR } from "./ops";
-import { inlineBytes, moveTo, sizeOf, subroutine, symbol, u16, u16ptr, u8 } from "./utils";
+import { LCDCF_BGON, LCDCF_ON, rBGP, rLCDC, rLY, rNR52, rSCX, rSCY, rWX, rWY } from "./hardware-inc";
+import { CALL, CP, DEC, INC, JP, LD, OR, RET } from "./ops";
+import { inlineBytes, moveTo, sizeOf, block, symbol, u16, u16ptr, u8, label, symbolFromLabel } from "./utils";
 import {
   AssemblerOperation,
   Flag,
@@ -16,25 +16,26 @@ import * as fs from 'fs/promises';
 import * as fsSync from 'fs';
 import { assemble } from "./assembler";
 
-const Header = symbol('Header');
-const EntryPoint = symbol('EntryPoint');
-const Tiles = symbol('Tiles');
-const TilesEnd = symbol('TilesEnd');
-const TileMap = symbol('TileMap');
-const TileMapEnd = symbol('TileMapEnd');
-const Done = symbol('Done');
+const Tiles = label('Tiles');
+const TilesEnd = label('TilesEnd');
+const TileMap = label('TileMap');
+const TileMapEnd = label('TileMapEnd');
+const Done = label('Done');
+
+const sTiles = symbolFromLabel(Tiles);
+const sTilesEnd = symbolFromLabel(TilesEnd);
+const sTileMap = symbolFromLabel(TileMap);
+const sTileMapEnd = symbolFromLabel(TileMapEnd);
+const sDone = symbolFromLabel(Done);
 
 const tileData = fsSync.readFileSync(path.join(__dirname, '..', 'tiledata.bin'));
 const tileMapData = fsSync.readFileSync(path.join(__dirname, '..', 'map.bin'));
 
-const waitVBlank = subroutine('WaitVBlank', ({ label: WaitVBlank }) => [
+const waitForVBlank = block('WaitForVBlank', ({ start: WaitVBlank }) => [
   LD(Reg8.A, u16ptr(rLY)),
   CP(Reg8.A, u8(144)),
   JP(Flag.Carry, WaitVBlank),
-
-  // Turn the LCD off
-  LD(Reg8.A, u8(0)),
-  LD(u16ptr(rLCDC), Reg8.A),
+  RET()
 ]);
 
 const copyData = (
@@ -42,12 +43,12 @@ const copyData = (
   dataAddress: SymbolOr<U16Imm>,
   targetAddress: SymbolOr<U16Imm>,
   size: SymbolOr<U16Imm>
-) => subroutine(name, () => [
+) => block(name, () => [
   LD(Reg16.DE, dataAddress),
   LD(Reg16.HL, targetAddress),
   LD(Reg16.BC, size),
 // copy_start:
-  symbol(`${name}_copy_start`),
+  label(`${name}_copy_start`),
   LD(Reg8.A, Reg16Ptr.DE),
   LD(Reg16Ptr.HLplus, Reg8.A),
   INC(Reg16.DE),
@@ -57,22 +58,24 @@ const copyData = (
   JP(Flag.NotZero, symbol(`${name}_copy_start`)),
 ]);
 
-const copyTiles = copyData('CopyTiles', Tiles, u16(0x9000), sizeOf(Tiles, TilesEnd));
-const copyTileMap = copyData('CopyMap', TileMap, u16(0x9800), sizeOf(TileMap, TileMapEnd));
+const copyTiles = copyData('CopyTiles', sTiles, u16(0x9000), sizeOf(sTiles, sTilesEnd));
+const copyTileMap = copyData('CopyMap', sTileMap, u16(0x9800), sizeOf(sTileMap, sTileMapEnd));
+
+const scyWaitTimer = u16ptr(0xC100);
+const scxWaitTimer = u16ptr(0xC101);
 
 const program: AssemblerOperation[] = [
-  moveTo(0x100),
-
-Header,
-  JP(EntryPoint),
-  moveTo(0x150),
-
-EntryPoint,
   LD(Reg8.A, u8(0)),
   LD(u16ptr(rNR52), Reg8.A),
-  waitVBlank.subroutine,
-  copyTiles.subroutine,
-  copyTileMap.subroutine,
+
+  CALL(waitForVBlank.start),
+
+  // Turn the LCD off
+  LD(Reg8.A, u8(0)),
+  LD(u16ptr(rLCDC), Reg8.A),
+
+  copyTiles.block,
+  copyTileMap.block,
 
   // Turn the LCD on
   LD(Reg8.A, u8(LCDCF_ON | LCDCF_BGON)),
@@ -83,8 +86,31 @@ EntryPoint,
   LD(u16ptr(rBGP), Reg8.A),
 
 Done,
-  // Loop forever
-  JP(Done),
+  CALL(waitForVBlank.start),
+label('scyTimer'),
+  LD(Reg8.A, scyWaitTimer),
+  INC(Reg8.A),
+  LD(scyWaitTimer, Reg8.A),
+  CP(Reg8.A, u8(0xff)),
+  JP(Flag.NotZero, symbol('scyTimer')),
+
+  LD(Reg8.A, u16ptr(rSCY)),
+  INC(Reg8.A),
+  LD(u16ptr(rSCY), Reg8.A),
+
+label('scxTimer'),
+  LD(Reg8.A, scxWaitTimer),
+  INC(Reg8.A),
+  LD(scxWaitTimer, Reg8.A),
+  CP(Reg8.A, u8(0xff)),
+  JP(Flag.NotZero, symbol('scxTimer')),
+
+  LD(Reg8.A, u16ptr(rSCX)),
+  DEC(Reg8.A),
+  LD(u16ptr(rSCX), Reg8.A),
+  JP(sDone),
+
+  waitForVBlank.block,
 
   // Raw tiles and tilemap data
   Tiles, inlineBytes(tileData), TilesEnd,

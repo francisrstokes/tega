@@ -50,8 +50,11 @@ export const LCDCF_BGON    = 0b00000001; // BG Display
 
 export const rBGP = 0xFF47;
 
-
 export const rNR52 = 0xFF26;
 
+export const rSCY = 0xFF42;
+export const rSCX = 0xFF43;
+export const rWY = 0xFF4A;
+export const rWX = 0xFF4B;
 export const rLY = 0xFF44;
 

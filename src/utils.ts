@@ -12,7 +12,8 @@ import {
   SizeOfReference,
   ImmediateKey,
   AssemblerOperation,
-  CompoundOperation
+  CompoundOperation,
+  SymbolDefinition
 } from "./types";
 
 export const u8 = (value: number): U8Imm => ({ type: ImmediateKey.u8imm, value });
@@ -21,6 +22,7 @@ export const u16 = (value: number): U16Imm => ({ type: ImmediateKey.u16imm, valu
 export const u16ptr = (value: number): U16Ptr => ({ type: ImmediateKey.u16ptr, value });
 export const ffPageOffset = (value: number): FFPageOffset => ({ type: ImmediateKey.ffPageOffset, value });
 export const symbol = (value: string): BaseSymbolReference => ({ type: 'symbolReference', value });
+export const label = (value: string): SymbolDefinition => ({ type: 'symbolDefinition', value });
 export const inlineBytes = (bytes: ByteArray): InlineBytes => ({ type: 'inlineBytes', bytes });
 export const $addr: BaseSymbolReference = Object.freeze({type: 'symbolReference', value: '$currentAddress' });
 export const moveTo = (address: number): MoveTo => ({ type: 'moveTo', address });
@@ -30,27 +32,32 @@ export const sizeOf = (symbolA: BaseSymbolReference, symbolB: BaseSymbolReferenc
   symbolB
 });
 
+export const symbolFromLabel = (s: SymbolDefinition): BaseSymbolReference => ({ type: 'symbolReference', value: s.value });
 
-export type Subroutine = {
-  label: BaseSymbolReference;
-  endLabel: BaseSymbolReference;
+export type Block = {
+  block: CompoundOperation;
+  start: BaseSymbolReference;
+  end: BaseSymbolReference;
   size: SizeOfReference;
-  subroutine: CompoundOperation;
 }
-export const subroutine = (
+export const block = (
   name: string,
-  getOperations: (symbols: Omit<Subroutine, 'subroutine'>) => AssemblerOperation[]
-): Subroutine => {
-  const label = symbol(name);
-  const endLabel = symbol(`${name}_end`);
-  const size = sizeOf(label, endLabel);
+  getOperations: (symbols: Omit<Block, 'block'>) => AssemblerOperation[]
+): Block => {
+  const startLabel = label(name);
+  const endLabel = label(`${name}_end`);
+
+  const start = symbolFromLabel(startLabel);
+  const end = symbolFromLabel(endLabel);
+
+  const size = sizeOf(start, end);
   return {
-    label,
-    endLabel,
+    start: start,
+    end: end,
     size,
-    subroutine: { type: 'compound', operations: [
-      label,
-      ...getOperations({ label, endLabel, size }),
+    block: { type: 'compound', operations: [
+      startLabel,
+      ...getOperations({ start, end, size }),
       endLabel
     ] }
   };

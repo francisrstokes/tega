@@ -21,6 +21,7 @@ export type ImmediateValue =
   | FFPageOffset
   | SPOffset;
 
+export type SymbolDefinition = { type: 'symbolDefinition', value: string; };
 export type BaseSymbolReference = { type: 'symbolReference', value: string; };
 export type SizeOfReference = {
   type: 'sizeOfReference';
@@ -56,7 +57,7 @@ export type MoveTo = { type: 'moveTo', address: number; };
 export type CompoundOperation = { type: 'compound', operations: AssemblerOperation[]; };
 
 export type AssemblerOperation =
-  | BaseSymbolReference
+  | SymbolDefinition
   | OpDescription
   | InlineBytes
   | MoveTo
