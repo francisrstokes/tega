@@ -9,7 +9,7 @@ const nintendoLogo = new Uint8Array([
 
 const stringToUint8Array = (s: string) => new Uint8Array(s.split('').map(c => c.charCodeAt(0)));
 
-type RevisitItem = { symbol: SymbolReference, offset: number, size: number };
+type RevisitItem = { symbol: SymbolReference, offset: number, size: 1 | 2 };
 type SymbolTable = Record<string, number>;
 type RevisitQueue = Array<RevisitItem>;
 type ResolutionResult = {
@@ -48,6 +48,20 @@ const resolveSymbol = (
       resolved: true,
       value: symbol.value
     };
+  }
+};
+
+const insertBytes = (
+  buffer: Uint8Array,
+  address: number,
+  value: number,
+  size: 1 | 2
+) => {
+  if (size === 1) {
+    buffer[address] = value & 0xff;
+  } else {
+    buffer[address] = value & 0xff;
+    buffer[address + 1] = (value >> 8) & 0xff;
   }
 };
 
@@ -96,57 +110,24 @@ const processOp = (
 
       // One Byte immediates
       if ('u8' in op) {
-        const result = resolveSymbol(op.u8, symbols, offset);
-        if (result.resolved) {
-          buffer[offset] = result.value & 0xff;
-        } else {
           revisit.push({ offset, size: 1, symbol: op.u8 as SymbolReference });
-        }
         offset += 1;
       } else if ('i8' in op) {
-        const result = resolveSymbol(op.i8, symbols, offset);
-        if (result.resolved) {
-          buffer[offset] = result.value & 0xff;
-        } else {
           revisit.push({ offset, size: 1, symbol: op.i8 as SymbolReference });
-        }
         offset += 1;
       } else if ('ffPageOffset' in op) {
-        const result = resolveSymbol(op.ffPageOffset, symbols, offset);
-        if (result.resolved) {
-          buffer[offset] = result.value & 0xff;
-        } else {
           revisit.push({ offset, size: 1, symbol: op.ffPageOffset as SymbolReference });
-        }
         offset += 1;
       } else if ('spOffset' in op) {
-        const result = resolveSymbol(op.spOffset, symbols, offset);
-        if (result.resolved) {
-          buffer[offset] = result.value & 0xff;
-        } else {
           revisit.push({ offset, size: 1, symbol: op.spOffset as SymbolReference });
-        }
         offset += 1;
       }
-
       // Two Byte Immediates
       else if ('u16' in op) {
-        const result = resolveSymbol(op.u16, symbols, offset);
-        if (result.resolved) {
-          buffer[offset] = result.value & 0xff;
-          buffer[offset + 1] = (result.value >> 8) & 0xff;
-        } else {
           revisit.push({ offset, size: 2, symbol: op.u16 as SymbolReference });
-        }
         offset += 2;
       } else if ('u16ptr' in op) {
-        const result = resolveSymbol(op.u16ptr, symbols, offset);
-        if (result.resolved) {
-          buffer[offset] = result.value & 0xff;
-          buffer[offset + 1] = (result.value >> 8) & 0xff;
-        } else {
           revisit.push({ offset, size: 2, symbol: op.u16ptr as SymbolReference });
-        }
         offset += 2;
       }
 
@@ -175,7 +156,7 @@ export const assemble = (ops: AssemblerOperation[]) => {
 
   // Resolve anything that wasn't found during the operations pass
   for (const item of revisit) {
-    const result = resolveSymbol(item.symbol, symbols, offset);
+    const result = resolveSymbol(item.symbol, symbols, item.offset);
     if (!result.resolved) {
       if (item.symbol.type === 'symbolReference') {
         throw new Error(`Unable to resolve symbol "${item.symbol.value}"`);
@@ -190,12 +171,7 @@ export const assemble = (ops: AssemblerOperation[]) => {
       }
     }
 
-    if (item.size === 1) {
-      ROMBuffer[item.offset] = result.value & 0xff;
-    } else {
-      ROMBuffer[item.offset] = result.value & 0xff;
-      ROMBuffer[item.offset + 1] = (result.value >> 8) & 0xff;
-    }
+    insertBytes(ROMBuffer, item.offset, result.value, item.size);
   }
 
   // Insert header information
