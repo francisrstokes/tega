@@ -59,7 +59,7 @@ const resolveSymbol = (
   symbols: SymbolTable,
   offset: number
 ): ResolutionResult => {
-  if (symbol.type === 'symbolReference') {
+  if (symbol.type === 'symbolicLabel') {
     // Builtins
     switch (symbol.value) {
       case '$addr':             return { resolved: true, value: offset };
@@ -77,6 +77,12 @@ const resolveSymbol = (
     return {
       resolved: a.resolved && b.resolved,
       value: b.value - a.value
+    };
+  } else if (symbol.type === 'relativeToReference') {
+    const symbolLoc = resolveSymbol(symbol.symbol, symbols, offset);
+    return {
+      resolved: symbolLoc.resolved,
+      value: symbolLoc.value - offset - 1 // Relative to start of instruction
     };
   } else {
     return {
@@ -119,7 +125,7 @@ const processOp = (
       return offset;
     }
 
-    case "symbolDefinition": {
+    case "symbolicLabel": {
       if (op.value in symbols) {
         // TODO: Improve these errors with positional information
         throw new Error(`Symbol "${op.value}" has already been declared`);
@@ -128,7 +134,9 @@ const processOp = (
         throw new Error(`Symbol "${op.value}" has reserved`);
       }
 
-      console.log(`${op.value}: 0x${offset.toString(16)}`);
+      if (!op.value.startsWith('__discard')) {
+        console.log(`${op.value}: 0x${offset.toString(16)}`);
+      }
 
       symbols[op.value] = offset;
       return offset;
@@ -193,9 +201,9 @@ export const assemble = (ops: AssemblerOperation[], header: ROMHeader = {}) => {
   for (const item of revisit) {
     const result = resolveSymbol(item.symbol, symbols, item.offset);
     if (!result.resolved) {
-      if (item.symbol.type === 'symbolReference') {
+      if (item.symbol.type === 'symbolicLabel') {
         throw new Error(`Unable to resolve symbol "${item.symbol.value}"`);
-      } else {
+      } else if (item.symbol.type === 'sizeOfReference') {
         const symbolA = item.symbol.symbolA.value;
         const symbolB = item.symbol.symbolB.value;
 
@@ -203,6 +211,8 @@ export const assemble = (ops: AssemblerOperation[], header: ROMHeader = {}) => {
           throw new Error(`Unable to resolve symbol "${symbolA}"`);
         }
         throw new Error(`Unable to resolve symbol "${symbolB}"`);
+      } else if (item.symbol.type === 'relativeToReference') {
+        throw new Error(`Unable to resolve referenced relative symbol "${item.symbol.symbol.value}"`);
       }
     }
 
@@ -237,5 +247,8 @@ export const assemble = (ops: AssemblerOperation[], header: ROMHeader = {}) => {
   }
   insertBytes(ROMBuffer, 0x14F, checksum & 0xffff, 2);
 
-  return ROMBuffer;
+  return {
+    buffer: ROMBuffer,
+    symbols
+  };
 };

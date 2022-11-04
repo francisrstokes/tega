@@ -21,15 +21,18 @@ export type ImmediateValue =
   | FFPageOffset
   | SPOffset;
 
-export type SymbolDefinition = { type: 'symbolDefinition', value: string; };
-export type BaseSymbolReference = { type: 'symbolReference', value: string; };
+export type SymbolicLabel = { type: 'symbolicLabel', value: string };
 export type SizeOfReference = {
   type: 'sizeOfReference';
-  symbolA: BaseSymbolReference;
-  symbolB: BaseSymbolReference;
+  symbolA: SymbolicLabel;
+  symbolB: SymbolicLabel;
 };
+export type RelativeToReference = {
+  type: 'relativeToReference';
+  symbol: SymbolicLabel;
+}
 
-export type SymbolReference = BaseSymbolReference | SizeOfReference;
+export type SymbolReference = SymbolicLabel | SizeOfReference | RelativeToReference;
 
 export type SymbolOr<T> = SymbolReference | T;
 
@@ -57,7 +60,7 @@ export type MoveTo = { type: 'moveTo', address: number; };
 export type CompoundOperation = { type: 'compound', operations: AssemblerOperation[]; };
 
 export type AssemblerOperation =
-  | SymbolDefinition
+  | SymbolicLabel
   | OpDescription
   | InlineBytes
   | MoveTo

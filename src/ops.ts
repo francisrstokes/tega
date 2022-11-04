@@ -17,8 +17,9 @@ import {
 } from "./types";
 
 const isSymbolRef = (x: string) => [
-  "symbolReference",
+  "symbolicLabel",
   "sizeOfReference",
+  "relativeToReference",
 ].includes(x);
 
 export function NOP(): OpDescription {

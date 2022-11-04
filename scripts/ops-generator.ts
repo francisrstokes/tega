@@ -314,8 +314,9 @@ const typeImports = [
 
 const fns = [
   'const isSymbolRef = (x: string) => [',
-  '  "symbolReference",',
+  '  "symbolicLabel",',
   '  "sizeOfReference",',
+  '  "relativeToReference",',
   '].includes(x);',
   ''
 ].join('\n');
