@@ -19,6 +19,7 @@ export const u8 = (value: number): U8Imm => ({ type: ImmediateKey.u8imm, value }
 export const i8 = (value: number): I8Imm => ({ type: ImmediateKey.i8imm, value });
 export const u16 = (value: number): U16Imm => ({ type: ImmediateKey.u16imm, value });
 export const u16ptr = (value: number): U16Ptr => ({ type: ImmediateKey.u16ptr, value });
+export const addr = u16ptr;
 export const ffPageOffset = (value: number): FFPageOffset => ({ type: ImmediateKey.ffPageOffset, value });
 export const label = (value: string): SymbolicLabel => ({ type: 'symbolicLabel', value });
 export const inlineBytes = (bytes: ByteArray): InlineBytes => ({ type: 'inlineBytes', bytes });
