@@ -242,10 +242,12 @@ export const assemble = (ops: AssemblerOperation[], header: ROMHeader = {}) => {
 
   // Global checksum calculation
   let checksum = 0;
-  for (let i = 0; i <= ROMBuffer.byteLength; i++) {
+  for (let i = 0; i < ROMBuffer.byteLength; i++) {
     checksum += ROMBuffer[i];
   }
-  insertBytes(ROMBuffer, 0x14F, checksum & 0xffff, 2);
+  checksum & 0xffff;
+  ROMBuffer[0x14E] = checksum >> 8;
+  ROMBuffer[0x14F] = checksum & 0xff;
 
   return {
     buffer: ROMBuffer,
