@@ -1,3 +1,4 @@
+import { RET } from "./ops";
 import {
   I8Imm,
   U16Imm,
@@ -65,3 +66,34 @@ export const block = (
     ])
   };
 };
+
+export type FnBlock = {
+  block: CompoundOperation;
+  start: SymbolicLabel;
+  end: SymbolicLabel;
+  returnLabel: SymbolicLabel;
+  size: SizeOfReference;
+}
+export const fn = (
+  name: string,
+  getOperations: (symbols: Omit<Block, 'block'>) => AssemblerOperation[]
+): FnBlock => {
+  const start = label(name);
+  const end = label(`${name}_end`);
+  const ret = label(`${name}_ret`);
+  const size = sizeOf(start, end);
+
+  return {
+    start: start,
+    end: end,
+    size,
+    returnLabel: ret,
+    block: group([
+      start,
+      ...getOperations({ start, end, size }),
+      ret,
+      RET(),
+      end,
+    ])
+  };
+}
