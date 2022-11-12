@@ -13,7 +13,8 @@ import {
   ImmediateKey,
   AssemblerOperation,
   CompoundOperation,
-  RelativeToReference
+  RelativeToReference,
+  VirtualOffsetControl
 } from "./types";
 
 export const u8 = (value: number): U8Imm => ({ type: ImmediateKey.u8imm, value });
@@ -40,6 +41,14 @@ export const group = (operations: AssemblerOperation[]): CompoundOperation => ({
   type: 'compound',
   operations
 });
+
+const virtualSpace = (address: number): VirtualOffsetControl => ({ type: "virtualOffsetControl", address, useROMOffset: false });
+const romSpace = (): VirtualOffsetControl => ({ type: "virtualOffsetControl", address: 0, useROMOffset: true });
+export const virtualOffset = (address: number, ops: AssemblerOperation[]): CompoundOperation => group([
+  virtualSpace(address),
+  ...ops,
+  romSpace()
+]);
 
 export type Block = {
   block: CompoundOperation;

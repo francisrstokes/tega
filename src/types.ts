@@ -58,12 +58,14 @@ export type ByteArray = Uint8Array | Int8Array;
 export type InlineBytes = { type: 'inlineBytes', bytes: ByteArray; };
 export type MoveTo = { type: 'moveTo', address: number; };
 export type CompoundOperation = { type: 'compound', operations: AssemblerOperation[]; };
+export type VirtualOffsetControl = { type: 'virtualOffsetControl', address: number, useROMOffset: boolean };
 
 export type AssemblerOperation =
   | SymbolicLabel
   | OpDescription
   | InlineBytes
   | MoveTo
+  | VirtualOffsetControl
   | CompoundOperation;
 
 export enum Reg8 {
@@ -87,8 +89,8 @@ export enum Reg16Ptr {
   BC       = '(BC)',
   DE       = '(DE)',
   HL       = '(HL)',
-  HLplus   = '(HL+)',
-  HLminus  = '(HL-)',
+  HLinc    = '(HL+)',
+  HLdec    = '(HL-)',
   SP       = '(SP)',
 };
 
