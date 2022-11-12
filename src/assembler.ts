@@ -109,24 +109,22 @@ const insertBytes = (
 const processOp = (
   op: AssemblerOperation,
   buffer: Uint8Array,
-  offset: number,
-  symbols: SymbolTable,
-  revisit: RevisitQueue,
+  state: AssemblerState
 ) => {
   switch (op.type) {
     case "moveTo": {
-      offset = op.address;
-      return offset;
+      state.offset = op.address;
+      return state.offset;
     }
 
     case "inlineBytes": {
-      buffer.set(op.bytes, offset);
-      offset += op.bytes.byteLength;
-      return offset;
+      buffer.set(op.bytes, state.offset);
+      state.offset += op.bytes.byteLength;
+      return state.offset;
     }
 
     case "symbolicLabel": {
-      if (op.value in symbols) {
+      if (op.value in state.symbols) {
         // TODO: Improve these errors with positional information
         throw new Error(`Symbol "${op.value}" has already been declared`);
       }
@@ -135,71 +133,78 @@ const processOp = (
       }
 
       if (!op.value.startsWith('__discard')) {
-        console.log(`${op.value}: 0x${offset.toString(16)}`);
+        console.log(`${op.value.padEnd(30, ' ')} 0x${state.offset.toString(16)}`);
       }
 
-      symbols[op.value] = offset;
-      return offset;
+      state.symbols[op.value] = state.offset;
+      return state.offset;
     }
 
     case "opDescription": {
       if (op.isPrefix) {
-        buffer[offset++] = 0xCB;
+        buffer[state.offset++] = 0xCB;
       }
-      buffer[offset++] = op.opcode;
+      buffer[state.offset++] = op.opcode;
 
       // Can't figure out a straightforward way to group the one and two byte immediate resolutions
       // They only differ by key, the rest of the code block is the same.
 
       // One Byte immediates
       if ('u8' in op) {
-        revisit.push({ offset, size: 1, symbol: op.u8 as SymbolReference });
-        offset += 1;
+        state.revisit.push({ offset: state.offset, size: 1, symbol: op.u8 as SymbolReference });
+        state.offset += 1;
       } else if ('i8' in op) {
-        revisit.push({ offset, size: 1, symbol: op.i8 as SymbolReference });
-        offset += 1;
+        state.revisit.push({ offset: state.offset, size: 1, symbol: op.i8 as SymbolReference });
+        state.offset += 1;
       } else if ('ffPageOffset' in op) {
-        revisit.push({ offset, size: 1, symbol: op.ffPageOffset as SymbolReference });
-        offset += 1;
+        state.revisit.push({ offset: state.offset, size: 1, symbol: op.ffPageOffset as SymbolReference });
+        state.offset += 1;
       } else if ('spOffset' in op) {
-        revisit.push({ offset, size: 1, symbol: op.spOffset as SymbolReference });
-        offset += 1;
+        state.revisit.push({ offset: state.offset, size: 1, symbol: op.spOffset as SymbolReference });
+        state.offset += 1;
       }
       // Two Byte Immediates
       else if ('u16' in op) {
-        revisit.push({ offset, size: 2, symbol: op.u16 as SymbolReference });
-        offset += 2;
+        state.revisit.push({ offset: state.offset, size: 2, symbol: op.u16 as SymbolReference });
+        state.offset += 2;
       } else if ('u16ptr' in op) {
-        revisit.push({ offset, size: 2, symbol: op.u16ptr as SymbolReference });
-        offset += 2;
+        state.revisit.push({ offset: state.offset, size: 2, symbol: op.u16ptr as SymbolReference });
+        state.offset += 2;
       }
 
-      return offset;
+      return state.offset;
     }
 
     case "compound": {
       for (let compoundOp of op.operations) {
-        offset = processOp(compoundOp, buffer, offset, symbols, revisit);
+        state.offset = processOp(compoundOp, buffer, state);
       }
-      return offset;
+      return state.offset;
     }
   }
 };
 
+type AssemblerState = {
+  revisit: RevisitQueue;
+  symbols: SymbolTable;
+  offset: number;
+}
 export const assemble = (ops: AssemblerOperation[], header: ROMHeader = {}) => {
   const ROMBuffer = new Uint8Array(0x8000); // Simple 32kb ROM only (for now)
 
-  const revisit: RevisitQueue = [];
-  const symbols: SymbolTable = {};
-  let offset = 0x150;
+  const state: AssemblerState = {
+    offset: 0x150,
+    symbols: {},
+    revisit: [],
+  };
 
   for (let op of ops) {
-    offset = processOp(op, ROMBuffer, offset, symbols, revisit);
+    processOp(op, ROMBuffer, state);
   }
 
   // Resolve anything that wasn't found during the operations pass
-  for (const item of revisit) {
-    const result = resolveSymbol(item.symbol, symbols, item.offset);
+  for (const item of state.revisit) {
+    const result = resolveSymbol(item.symbol, state.symbols, item.offset);
     if (!result.resolved) {
       if (item.symbol.type === 'symbolicLabel') {
         throw new Error(`Unable to resolve symbol "${item.symbol.value}"`);
@@ -207,7 +212,7 @@ export const assemble = (ops: AssemblerOperation[], header: ROMHeader = {}) => {
         const symbolA = item.symbol.symbolA.value;
         const symbolB = item.symbol.symbolB.value;
 
-        if (!(symbolA in symbols)) {
+        if (!(symbolA in state.symbols)) {
           throw new Error(`Unable to resolve symbol "${symbolA}"`);
         }
         throw new Error(`Unable to resolve symbol "${symbolB}"`);
@@ -251,6 +256,7 @@ export const assemble = (ops: AssemblerOperation[], header: ROMHeader = {}) => {
 
   return {
     buffer: ROMBuffer,
-    symbols
+    symbols: state.symbols,
+    finalOffset: state.offset,
   };
 };
