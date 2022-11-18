@@ -37,14 +37,14 @@ export const relative = (symbol: SymbolicLabel): RelativeToReference => ({
   type: 'relativeToReference',
   symbol,
 });
-export const group = (operations: AssemblerOperation[]): CompoundOperation => ({
+export const inline = (operations: AssemblerOperation[]): CompoundOperation => ({
   type: 'compound',
   operations
 });
 
 const virtualSpace = (address: number): VirtualOffsetControl => ({ type: "virtualOffsetControl", address, useROMOffset: false });
 const romSpace = (): VirtualOffsetControl => ({ type: "virtualOffsetControl", address: 0, useROMOffset: true });
-export const virtualOffset = (address: number, ops: AssemblerOperation[]): CompoundOperation => group([
+export const virtualOffset = (address: number, ops: AssemblerOperation[]): CompoundOperation => inline([
   virtualSpace(address),
   ...ops,
   romSpace()
@@ -68,7 +68,7 @@ export const block = (
     start: start,
     end: end,
     size,
-    block: group([
+    block: inline([
       start,
       ...getOperations({ start, end, size }),
       end
@@ -97,7 +97,7 @@ export const fn = (
     end: end,
     size,
     returnLabel: ret,
-    block: group([
+    block: inline([
       start,
       ...getOperations({ start, end, size }),
       ret,
