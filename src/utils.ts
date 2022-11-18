@@ -50,6 +50,92 @@ export const virtualOffset = (address: number, ops: AssemblerOperation[]): Compo
   romSpace()
 ]);
 
+export const scope = (name: string, ops: AssemblerOperation[], discardSymbols = false) => {
+  const prefix = `${discardSymbols ? '__discard_' : ''}${name}`;
+  const labelsInScope: Record<string, true> = {};
+
+  const prefixed = (label: string) => `${prefix}_${label}`;
+
+  const process = {
+    transformSymbol: (symbol: SymbolicLabel | RelativeToReference | SizeOfReference) => {
+      switch (symbol.type) {
+        case "symbolicLabel": {
+          if (symbol.value in labelsInScope) {
+            symbol.value = prefixed(symbol.value);
+          }
+        } break;
+
+        case "sizeOfReference": {
+          process.transformSymbol(symbol.symbolA);
+          process.transformSymbol(symbol.symbolB);
+        } break;
+
+        case "relativeToReference": {
+          process.transformSymbol(symbol.symbol);
+        } break;
+      }
+    },
+    recurseThroughOps: (op: AssemblerOperation) => {
+      switch (op.type) {
+        case "compound": {
+          op.operations.forEach(process.recurseThroughOps);
+        } break;
+
+        case "opDescription": {
+          if ('u8' in op && op.u8.type !== ImmediateKey.u8imm) {
+            process.transformSymbol(op.u8);
+          }
+          if ('i8' in op && op.i8.type !== ImmediateKey.i8imm) {
+            process.transformSymbol(op.i8);
+          }
+          if ('u16' in op && op.u16.type !== ImmediateKey.u16imm) {
+            process.transformSymbol(op.u16);
+          }
+          if ('u16ptr' in op && op.u16ptr.type !== ImmediateKey.u16ptr) {
+            process.transformSymbol(op.u16ptr);
+          }
+          if ('ffPageOffset' in op && op.ffPageOffset.type !== ImmediateKey.ffPageOffset) {
+            process.transformSymbol(op.ffPageOffset);
+          }
+          if ('spOffset' in op && op.spOffset.type !== ImmediateKey.spOffset) {
+            process.transformSymbol(op.spOffset);
+          }
+        } break;
+
+        case "symbolicLabel":
+        case "virtualOffsetControl":
+        case "moveTo":
+        case "inlineBytes": {
+          // Do nothing
+        } break;
+      }
+    },
+    findLabels: (op: AssemblerOperation) => {
+      switch (op.type) {
+        case "compound": {
+          op.operations.forEach(process.findLabels);
+        } break;
+
+        case "symbolicLabel": {
+          labelsInScope[op.value] = true;
+          op.value = prefixed(op.value);
+        } break;
+
+        case "opDescription":
+        case "virtualOffsetControl":
+        case "moveTo":
+        case "inlineBytes": {
+          // Do nothing
+        } break;
+      }
+    }
+  }
+
+  ops.forEach(process.findLabels);
+  ops.forEach(process.recurseThroughOps);
+  return inline(ops);
+}
+
 export type Block = {
   block: CompoundOperation;
   start: SymbolicLabel;

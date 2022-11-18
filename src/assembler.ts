@@ -215,6 +215,16 @@ const processOp = (
   }
 };
 
+const symbolsToSymFile = (symbols: SymbolTable) => {
+  // Format the symbol table to a .sym file
+  return Object.entries(symbols)
+  .filter(([name]) => !(name.startsWith('__discard') || name.endsWith('_end')))
+  .map(([name, offset]) => {
+    return `${offset.toString(16).padStart(4, '0')} ${name}`;
+  })
+  .join('\n');
+}
+
 type AssemblerState = {
   revisit: RevisitQueue;
   symbols: SymbolTable;
@@ -293,9 +303,18 @@ export const assemble = (ops: AssemblerOperation[], header: ROMHeader = {}) => {
   ROMBuffer[0x14E] = checksum >> 8;
   ROMBuffer[0x14F] = checksum & 0xff;
 
+  // Remove discarded symbols
+  const symbolKeys = Object.keys(state.symbols).filter(key =>
+    key.includes('__discard')
+  );
+  for (const key of symbolKeys) {
+    delete state.symbols[key];
+  }
+
   return {
     buffer: ROMBuffer,
     symbols: state.symbols,
+    formattedSym: symbolsToSymFile(state.symbols),
     finalOffset: state.offset,
   };
 };
