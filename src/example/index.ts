@@ -22,6 +22,7 @@ import { rngFunctions, rngTable } from './rng';
 import { call_memcpy, call_memset, call_waitForVBlank, stdFunctions } from "../std";
 import { CharJumpState } from './structs';
 import { allTileData, tiles, titleMap } from './tiles';
+import { call_rleUnpack, rleFunctions } from './rle';
 
 
 // Main Program ------------------------------
@@ -39,7 +40,7 @@ label('program_setup'),
   // Copy tiles and tile maps
   call_memcpy(tiles.start, u16(0x8000), tiles.size),
   call_memcpy(tiles.start, u16(0x9000), tiles.size),
-  call_memcpy(titleMap.start, u16(0x9800), titleMap.size),
+  call_rleUnpack(titleMap.start, u16(0x9800), titleMap.size),
 
   // Copy the DMA routine to HRAM
   copyDMAToRAM(),
@@ -150,6 +151,7 @@ label('game_loop'),
   rngFunctions,
   DMAFunctions,
   gameFunctions,
+  rleFunctions,
 
 // Data --------------------------------------
 

@@ -9,6 +9,7 @@ import { getRandom } from "./rng";
 import { applyOffsetToDEPtr, applyOffsetToHLPtr, call_memcpy, call_waitForVBlank, if_eq, if_ugte, if_ugte_reg, if_ult_reg, load_from_mem, read_modify_write_hl } from "../std";
 import { GameState, ObstacleStruct } from "./structs";
 import { gameOverMap } from "./tiles";
+import { call_rleUnpack } from "./rle";
 
 export const obstacleStartX = 21 * 8;
 
@@ -123,7 +124,7 @@ const setupGameOverScreen = fn('setupGameOverScreen', () => [
   LD(addr(rLCDC), Reg8.A),
 
   // Copy the main tile map to memory
-  call_memcpy(gameOverMap.start, u16(0x9800), gameOverMap.size),
+  call_rleUnpack(gameOverMap.start, u16(0x9800), gameOverMap.size),
 
   // Reset the scroll X register
   XOR(Reg8.A, Reg8.A),

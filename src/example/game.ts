@@ -8,6 +8,7 @@ import { bgWait, charProp, gameState, jumpButtonPressed, obstacle0, obstacle1, p
 import { call_memcpy, call_waitForVBlank, if_eq, if_ugte, load_from_mem, read_modify_write, switch_reg } from "../std";
 import { CharJumpState, CharStruct, GameState } from "./structs";
 import { tileMap } from "./tiles";
+import { call_rleUnpack } from "./rle";
 
 const BG_WAIT_TIMER = 0x5;
 
@@ -80,7 +81,7 @@ const titleScreen = fn('titleScreen', () => [
       LD(addr(rLCDC), Reg8.A),
 
       // Copy the main tile map to memory
-      call_memcpy(tileMap.start, u16(0x9800), tileMap.size),
+      call_rleUnpack(tileMap.start, u16(0x9800), tileMap.size),
 
       // Turn the LCD on
       LD(Reg8.A, u8(LCDCF_ON | LCDCF_BGON | LCDCF_OBJON)),
@@ -108,7 +109,7 @@ const gameOver = fn('gameOver', () => [
       LD(addr(rLCDC), Reg8.A),
 
       // Copy the main tile map to memory
-      call_memcpy(tileMap.start, u16(0x9800), tileMap.size),
+      call_rleUnpack(tileMap.start, u16(0x9800), tileMap.size),
 
       // Turn the LCD on
       LD(Reg8.A, u8(LCDCF_ON | LCDCF_BGON | LCDCF_OBJON)),
