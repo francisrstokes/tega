@@ -107,4 +107,15 @@ export enum ResetOffset {
   x38 = '38h',
 };
 
+export enum Bit {
+  b0 = "0",
+  b1 = "1",
+  b2 = "2",
+  b3 = "3",
+  b4 = "4",
+  b5 = "5",
+  b6 = "6",
+  b7 = "7",
+}
+
 export type FF_PageC = '(FF00+C)';
