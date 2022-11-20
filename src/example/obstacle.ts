@@ -2,12 +2,11 @@ import { LCDCF_BGON, LCDCF_ON, rLCDC, rSCX } from "../hardware-inc";
 import { ADD, AND, CALL, DEC, INC, JP, LD, POP, PUSH, RET, SLA, XOR } from "../ops";
 import { Flag, Reg16, Reg16Ptr, Reg8 } from "../types";
 import { addr, block, fn, inline, inlineBytes, label, scope, u16, u8 } from "../utils";
-import { OAMStruct } from "./oam";
 import { charGroundPos, charXPos } from "./physics";
 import { charShadowOAM, gameState, obstacle0, shadowOAM } from "./ram";
 import { getRandom } from "./rng";
 import { applyOffsetToDEPtr, applyOffsetToHLPtr, call_memcpy, call_waitForVBlank, if_eq, if_ugte, if_ugte_reg, if_ult_reg, load_from_mem, read_modify_write_hl } from "../std";
-import { GameState, ObstacleStruct } from "./structs";
+import { GameState, OAMStruct, ObstacleStruct } from "./structs";
 import { gameOverMap } from "./tiles";
 import { call_rleUnpack } from "./rle";
 
@@ -142,191 +141,202 @@ const setupGameOverScreen = fn('setupGameOverScreen', () => [
   CALL(setupObstacles.start)
 ]);
 
+// This code is a little messy. Maybe one day I'll come back and split it all into
+// nice functions, but for now, you know what they say - "if it ain't broke, don't fix it"
 export const moveObstacles = fn('moveObstacles', () => [
   call_loadObstaclePropAViaHL(ObstacleStruct.isActive),
-  if_eq(Reg8.A, u8(1), { then: [
-    // Is this obstacle ready to be updated?
-    call_loadObstaclePropAViaHL(ObstacleStruct.updateTimer),
-    if_ugte(Reg8.A, u8(updateTimer), { then: [
-      // Reset the timer
-      XOR(Reg8.A, Reg8.A),
-      LD(Reg16Ptr.HL, Reg8.A),
+  if_eq(Reg8.A, u8(1), {
+    then: [
+      // Is this obstacle ready to be updated?
+      call_loadObstaclePropAViaHL(ObstacleStruct.updateTimer),
+      if_ugte(Reg8.A, u8(updateTimer), {
+        then: [
+          // Reset the timer
+          XOR(Reg8.A, Reg8.A),
+          LD(Reg16Ptr.HL, Reg8.A),
 
-      // C = number of possible tiles in an obstacle
-      LD(Reg8.C, u8(4)),
+          // C = number of possible tiles in an obstacle
+          LD(Reg8.C, u8(4)),
 
-      // Load and add the oam start index for this obstacle
-      call_loadObstaclePropAViaHL(ObstacleStruct.oamIndex),
-      // Multiply by 4 to get the offset of the first entry
-      SLA(Reg8.A),
-      SLA(Reg8.A),
-      // A = Offset to the x position
-      ADD(Reg8.A, u8(OAMStruct.x)),
+          // Load and add the oam start index for this obstacle
+          call_loadObstaclePropAViaHL(ObstacleStruct.oamIndex),
+          // Multiply by 4 to get the offset of the first entry
+          SLA(Reg8.A),
+          SLA(Reg8.A),
+          // A = Offset to the x position
+          ADD(Reg8.A, u8(OAMStruct.x)),
 
-      // Load the first OAM entry x-position address for this obstacle into HL
-      LD(Reg16.HL, u16(shadowOAM)),
-      // LD(Reg8.A, Reg8.B),
-      CALL(applyOffsetToHLPtr.start),
+          // Load the first OAM entry x-position address for this obstacle into HL
+          LD(Reg16.HL, u16(shadowOAM)),
+          // LD(Reg8.A, Reg8.B),
+          CALL(applyOffsetToHLPtr.start),
 
-      // B = whether or not the obstacle is now at x=0 (1), or obstacle in collision zone (2)
-      LD(Reg8.B, u8(0)),
+          // B = whether or not the obstacle is now at x=0 (1), or obstacle in collision zone (2)
+          LD(Reg8.B, u8(0)),
 
-      label('moveObstacles_update_loop'),
-      read_modify_write_hl(Reg8.A, [
-        DEC(Reg8.A),
-        // Did we reach the end?
-        if_eq(Reg8.A, u8(0), { then: [
-          LD(Reg8.B, u8(1)),              // Yes, we reached the end
-          LD(Reg8.A, u8(obstacleStartX)), // Reset x position
-        ], else: [
-          label('moveObstacles_collision_range'),
+          scope('update_loop', [
+            label('loop'),
+            read_modify_write_hl(Reg8.A, [
+              DEC(Reg8.A),
+              // Did we reach the end?
+              if_eq(Reg8.A, u8(0), {
+                then: [
+                  LD(Reg8.B, u8(1)),              // Yes, we reached the end
+                  LD(Reg8.A, u8(obstacleStartX)), // Reset x position
+                ],
+                else: [
+                  label('moveObstacles_collision_range'),
 
-          // Backup the x pos in D
-          // Note: DE contains the base address of the obstacle, so it needs to
-          // be backed up itself
-          PUSH('DE'),
-          LD(Reg8.D, Reg8.A),
-          // Check if the obstacle is in range of the character (x, x+8)
-          LD(Reg8.A, u8(charXPos)),
-          // if (D >= A && D < A+8)
-          if_ugte_reg(Reg8.D, { then: [
-            ADD(Reg8.A, u8(8)),
+                  // Backup the x pos in D
+                  // Note: DE contains the base address of the obstacle, so it needs to
+                  // be backed up itself
+                  PUSH('DE'),
+                  LD(Reg8.D, Reg8.A),
+                  // Check if the obstacle is in range of the character (x, x+8)
+                  LD(Reg8.A, u8(charXPos)),
+                  // if (D >= A && D < A+8)
+                  if_ugte_reg(Reg8.D, {
+                    then: [
+                      ADD(Reg8.A, u8(8)),
 
-            label('moveObstacles_debug_write_x_back'),
-            if_ult_reg(Reg8.D, { then: [
-              LD(Reg8.B, u8(2)),
-            ]}),
-          ]}),
-          // Reload A with the x pos
-          LD(Reg8.A, Reg8.D),
+                      label('moveObstacles_debug_write_x_back'),
+                      if_ult_reg(Reg8.D, {
+                        then: [
+                          LD(Reg8.B, u8(2)),
+                        ]
+                      }),
+                    ]}),
+                  // Reload A with the x pos
+                  LD(Reg8.A, Reg8.D),
 
-          // Restore the obstacle base pointer
-          POP('DE'),
-        ]}),
-      ]),
-      LD(Reg8.A, u8(OAMStruct.Size)), // Move HL* along to the next OAM entry x position
-      CALL(applyOffsetToHLPtr.start),
-      DEC(Reg8.C),
-      JP(Flag.NotZero, label('moveObstacles_update_loop')),
+                  // Restore the obstacle base pointer
+                  POP('DE'),
+                ]
+              }),
+            ]),
+            LD(Reg8.A, u8(OAMStruct.Size)), // Move HL* along to the next OAM entry x position
+            CALL(applyOffsetToHLPtr.start),
+            DEC(Reg8.C),
+            JP(Flag.NotZero, label('loop')),
+          ]),
 
-      // Check if the obstacle is at zero (B=1)
-      label('moveObstacles_obstacle_at_zero'),
-      if_eq(Reg8.B, u8(1), { then: [
-        // Set to inactive
-        call_loadHLWithObstaclePropAddr(ObstacleStruct.isActive),
-        XOR(Reg8.A, Reg8.A),
-        LD(Reg16Ptr.HL, Reg8.A),
+          // Check if the obstacle is at zero (B=1)
+          label('moveObstacles_obstacle_at_zero'),
+          if_eq(Reg8.B, u8(1), {
+            then: [
+              // Set to inactive
+              call_loadHLWithObstaclePropAddr(ObstacleStruct.isActive),
+              XOR(Reg8.A, Reg8.A),
+              LD(Reg16Ptr.HL, Reg8.A),
 
-        CALL(getRandom.start),
-        // AND(Reg8.A, u8(0x7)),
+              CALL(getRandom.start),
+              // AND(Reg8.A, u8(0x7)),
+              LD(Reg8.B, Reg8.A),
+
+              call_loadHLWithObstaclePropAddr(ObstacleStruct.cooldownTimer),
+              LD(Reg16Ptr.HL, Reg8.B),
+            ],
+            else: [
+              // In x range for collision?
+              label('moveObstacles_collision_check'),
+              if_eq(Reg8.B, u8(2), {
+                then: [
+                  // Collision when Cy < Oy -> [Oy >= Cy]
+                  load_from_mem(Reg8.B, addr(charShadowOAM + OAMStruct.y)),
+                  call_loadObstaclePropAViaHL(ObstacleStruct.yHeight),
+                  if_ugte_reg(Reg8.B, {
+                    then: [
+                      // Trigger the game over condition
+                      CALL(setupGameOverScreen.start),
+                      // Early return
+                      RET(),
+                    ]
+                  })
+                ]
+              })
+            ]
+          }),
+      ],
+      else: [
+        // Increment the timer
+        INC(Reg8.A),
         LD(Reg8.B, Reg8.A),
-
-        call_loadHLWithObstaclePropAddr(ObstacleStruct.cooldownTimer),
+        call_loadHLWithObstaclePropAddr(ObstacleStruct.updateTimer),
         LD(Reg16Ptr.HL, Reg8.B),
-      ], else: [
-        // In x range for collision?
-        label('moveObstacles_collision_check'),
-        if_eq(Reg8.B, u8(2), { then: [
-          // Collision when Cy < Oy -> [Oy >= Cy]
-          load_from_mem(Reg8.B, addr(charShadowOAM + OAMStruct.y)),
-          call_loadObstaclePropAViaHL(ObstacleStruct.yHeight),
-          if_ugte_reg(Reg8.B, { then: [
-            // Collision!
-            // label('infinite_loop'),
+      ]})
+    ],
+    else: [
+      label("moveObstacles_cooldown_period"),
+      call_loadObstaclePropAViaHL(ObstacleStruct.cooldownTimer),
+      if_eq(Reg8.A, u8(0), {
+        then: [
+          label("moveObstacles_cooldown_complete"),
+          // Make the obstacle active
+          LD(Reg8.B, u8(1)),
 
-            // LD(Reg8.A, u8(P1F_GET_BTN)),
-            // LD(addr(rP1), Reg8.A),
-            // load_from_mem(Reg8.B, addr(rP1)),
-            // AND(Reg8.A, u8(BTN_START)),
-            // // JP(Flag.Zero, label('program_setup')),
+          call_loadHLWithObstaclePropAddr(ObstacleStruct.isActive),
+          LD(Reg16Ptr.HL, Reg8.B),
 
-            // if_eq(Reg8.A, u8(0), { then: [
-              // Go to the game over screen
-              CALL(setupGameOverScreen.start),
+          // Choose a random new obstacle type
+          CALL(getRandom.start),
+          AND(Reg8.A, u8(0x7)),
+          LD(Reg8.B, Reg8.A),
+          call_loadHLWithObstaclePropAddr(ObstacleStruct.type),
+          LD(Reg16Ptr.HL, Reg8.B),
 
-              // Early return
-              RET(),
-            // ]}),
+          // Load the start of the obstacle table into HL
+          LD(Reg16.HL, obstacleTable.start),
 
-            // JP(label('infinite_loop')),
-          ]})
-        ]})
-      ]}),
-    ], else: [
-      // Increment the timer
-      INC(Reg8.A),
-      LD(Reg8.B, Reg8.A),
-      call_loadHLWithObstaclePropAddr(ObstacleStruct.updateTimer),
-      LD(Reg16Ptr.HL, Reg8.B),
-    ]})
-  ], else: [
-    label("moveObstacles_cooldown_period"),
-    call_loadObstaclePropAViaHL(ObstacleStruct.cooldownTimer),
-    if_eq(Reg8.A, u8(0), { then: [
-      label("moveObstacles_cooldown_complete"),
-      // Make the obstacle active
-      LD(Reg8.B, u8(1)),
+          // Each entry in the table is 6 bytes. type * 6 gives the offset into the table
+          // type * 5 == (type << 2) + type
+          LD(Reg8.A, Reg8.B),
+          SLA(Reg8.A),
+          SLA(Reg8.A),
+          ADD(Reg8.A, Reg8.B),
+          // HL = &ObstacleTable[type]
+          CALL(applyOffsetToHLPtr.start),
 
-      call_loadHLWithObstaclePropAddr(ObstacleStruct.isActive),
-      LD(Reg16Ptr.HL, Reg8.B),
+          // Load the yHeight into the obstacle struct, then increment HL to land
+          // on the the first tile of the table entry
+          label('Load_yheight_into_obstacle_struct'),
+          LD(Reg8.A, Reg16Ptr.HLinc),
+          LD(Reg8.B, Reg8.A),
+          PUSH('HL'),
+          call_loadHLWithObstaclePropAddr(ObstacleStruct.yHeight),
+          LD(Reg8.A, Reg8.B),
+          LD(Reg16Ptr.HL, Reg8.A),
 
-      // Choose a random new obstacle type
-      CALL(getRandom.start),
-      AND(Reg8.A, u8(0x7)),
-      LD(Reg8.B, Reg8.A),
-      call_loadHLWithObstaclePropAddr(ObstacleStruct.type),
-      LD(Reg16Ptr.HL, Reg8.B),
+          // Set up the tiles
+          call_loadObstaclePropAViaHL(ObstacleStruct.oamIndex),
+          // Multiply by 4 to get the offset of the first entry
+          SLA(Reg8.A),
+          SLA(Reg8.A),
+          // A = Offset to the tile property
+          ADD(Reg8.A, u8(OAMStruct.tile)),
 
-      // Load the start of the obstacle table into HL
-      LD(Reg16.HL, obstacleTable.start),
+          // Load the OAM base address into DE and add the offset
+          LD(Reg16.DE, u16(shadowOAM)),
+          CALL(applyOffsetToDEPtr.start),
 
-      // Each entry in the table is 6 bytes. type * 6 gives the offset into the table
-      // type * 5 == (type << 2) + type
-      LD(Reg8.A, Reg8.B),
-      SLA(Reg8.A),
-      SLA(Reg8.A),
-      ADD(Reg8.A, Reg8.B),
-      // HL = &ObstacleTable[type]
-      CALL(applyOffsetToHLPtr.start),
+          // Copy the tiles to OAM
+          POP('HL'),
+          CALL(setOAMTilesForObstacle.start),
+        ],
+        else: [
+          // Decrement cooldown timer
+          DEC(Reg8.A),
+          LD(Reg16Ptr.HL, Reg8.A)
+        ]
+      }),
 
-      // Load the yHeight into the obstacle struct, then increment HL to land
-      // on the the first tile of the table entry
-      label('Load_yheight_into_obstacle_struct'),
-      LD(Reg8.A, Reg16Ptr.HLinc),
-      LD(Reg8.B, Reg8.A),
-      PUSH('HL'),
-      call_loadHLWithObstaclePropAddr(ObstacleStruct.yHeight),
-      LD(Reg8.A, Reg8.B),
-      LD(Reg16Ptr.HL, Reg8.A),
-
-      // Set up the tiles
-      call_loadObstaclePropAViaHL(ObstacleStruct.oamIndex),
-      // Multiply by 4 to get the offset of the first entry
-      SLA(Reg8.A),
-      SLA(Reg8.A),
-      // A = Offset to the tile property
-      ADD(Reg8.A, u8(OAMStruct.tile)),
-
-      // Load the OAM base address into DE and add the offset
-      LD(Reg16.DE, u16(shadowOAM)),
-      CALL(applyOffsetToDEPtr.start),
-
-      // Copy the tiles to OAM
-      POP('HL'),
-      CALL(setOAMTilesForObstacle.start),
-    ], else: [
-      // Decrement cooldown timer
+      // Waste some cycles so that the game doesn't feel weirdly fast
+      // when no obstacles are being updated :/
+      LD(Reg8.A, u8(0x40)),
+      label('moveObstacles_waste_time'),
       DEC(Reg8.A),
-      LD(Reg16Ptr.HL, Reg8.A)
-    ]}),
-
-    // Waste some cycles so that the game doesn't feel weirdly fast
-    // when no obstacles are being updated :/
-    LD(Reg8.A, u8(0x40)),
-    label('moveObstacles_waste_time'),
-    DEC(Reg8.A),
-    JP(Flag.NotZero, label('moveObstacles_waste_time')),
-  ]}),
+      JP(Flag.NotZero, label('moveObstacles_waste_time')),
+    ]
+  }),
 ]);
 
 export const obstacleFunctions = inline([

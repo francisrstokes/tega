@@ -1,6 +1,5 @@
 import { addr } from "../utils";
-import { OAMStruct } from "./oam";
-import { CharStruct, ObstacleStruct } from "./structs";
+import { CharStruct, OAMStruct, ObstacleStruct } from "./structs";
 
 export const RAMStart = 0xC000;
 let RAMOffset = RAMStart;

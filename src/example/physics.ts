@@ -1,10 +1,9 @@
 import { ADD,CALL, INC, LD, RET, XOR } from "../ops";
 import { Reg8 } from "../types";
 import { addr, fn, inline, u8 } from "../utils";
-import { OAMStruct } from "./oam";
 import { charProp, charShadowOAM, jumpButtonPressed, physicsEvalTimer } from "./ram";
-import { if_eq, if_neq, if_ugte,  load_from_mem } from "../std";
-import { CharJumpState, CharStruct } from "./structs";
+import { if_eq, if_neq, if_ugte,  load_from_mem, switch_reg } from "../std";
+import { CharJumpState, CharStruct, OAMStruct } from "./structs";
 
 // TODO: Add a floating state that occurs for a few frames before falling
 
@@ -32,18 +31,20 @@ const jumpPhysicsIdle = fn('jumpPhysicsIdle', () => [
   load_from_mem(Reg8.A, addr(jumpButtonPressed)),
 
   // Button pressed is "active low" (i.e. 0 = pressed)
-  if_eq(Reg8.A, u8(0), { then: [
-    // Set the state to Jumping
-    setCharState(CharJumpState.Jumping),
+  if_eq(Reg8.A, u8(0), {
+    then: [
+      // Set the state to Jumping
+      setCharState(CharJumpState.Jumping),
 
-    // Set the jump timer to zero
-    XOR(Reg8.A, Reg8.A),
-    LD(charProp(CharStruct.jumpTimer), Reg8.A),
+      // Set the jump timer to zero
+      XOR(Reg8.A, Reg8.A),
+      LD(charProp(CharStruct.jumpTimer), Reg8.A),
 
-    // Set the jump amount to the configured start amount
-    LD(Reg8.A, u8(jumpStartAmount)),
-    LD(charProp(CharStruct.jumpAmount), Reg8.A),
-  ]})
+      // Set the jump amount to the configured start amount
+      LD(Reg8.A, u8(jumpStartAmount)),
+      LD(charProp(CharStruct.jumpAmount), Reg8.A),
+    ]
+  })
 ]);
 
 // void jumpPhysicsJumping()
@@ -55,48 +56,53 @@ const jumpPhysicsJumping = fn('jumpPhysicsJumping', () => [
 
   // Jump button is still pressed?
   load_from_mem(Reg8.A, addr(jumpButtonPressed)),
-  if_neq(Reg8.A, u8(0), { then: [
-    // If the jump button has been released, it's time to start falling
-    // Reset the jump timer
-    XOR(Reg8.A, Reg8.A),
-    LD(charProp(CharStruct.jumpTimer), Reg8.A),
+  if_neq(Reg8.A, u8(0), {
+    then: [
+      // If the jump button has been released, it's time to start falling
+      // Reset the jump timer
+      XOR(Reg8.A, Reg8.A),
+      LD(charProp(CharStruct.jumpTimer), Reg8.A),
 
-    // Reset y velocity
-    LD(charProp(CharStruct.yVel), Reg8.A),
+      // Reset y velocity
+      LD(charProp(CharStruct.yVel), Reg8.A),
 
-    // Reset gravity
-    LD(charProp(CharStruct.gravity), Reg8.A),
+      // Reset gravity
+      LD(charProp(CharStruct.gravity), Reg8.A),
 
-    // Change state to falling
-    setCharState(CharJumpState.Falling),
+      // Change state to falling
+      setCharState(CharJumpState.Falling),
 
-    // Early return
-    RET(),
-  ]}),
+      // Early return
+      RET(),
+    ]
+  }),
 
   // Jump timer expired?
   load_from_mem(Reg8.A, charProp(CharStruct.jumpTimer)),
-  if_ugte(Reg8.A, u8(jumpTimerMax), { then: [
-    // Reset the jump timer
-    XOR(Reg8.A, Reg8.A),
-    LD(charProp(CharStruct.jumpTimer), Reg8.A),
+  if_ugte(Reg8.A, u8(jumpTimerMax), {
+    then: [
+      // Reset the jump timer
+      XOR(Reg8.A, Reg8.A),
+      LD(charProp(CharStruct.jumpTimer), Reg8.A),
 
-    // Reset y velocity
-    LD(charProp(CharStruct.yVel), Reg8.A),
+      // Reset y velocity
+      LD(charProp(CharStruct.yVel), Reg8.A),
 
-    // Reset gravity
-    LD(charProp(CharStruct.gravity), Reg8.A),
+      // Reset gravity
+      LD(charProp(CharStruct.gravity), Reg8.A),
 
-    // Change state to falling
-    setCharState(CharJumpState.Falling),
+      // Change state to falling
+      setCharState(CharJumpState.Falling),
 
-    // Early return
-    RET(),
-  ], else: [
-    // Increment the jump timer
-    INC(Reg8.A),
-    LD(charProp(CharStruct.jumpTimer), Reg8.A)
-  ]}),
+      // Early return
+      RET(),
+    ],
+    else: [
+      // Increment the jump timer
+      INC(Reg8.A),
+      LD(charProp(CharStruct.jumpTimer), Reg8.A)
+    ]
+  }),
 
   // Jump logic
   // Increment the jump amount
@@ -104,9 +110,11 @@ const jumpPhysicsJumping = fn('jumpPhysicsJumping', () => [
   INC(Reg8.A),
 
   // Clamp it to max
-  if_ugte(Reg8.A, u8(jumpMaxVel), { then: [
-    LD(Reg8.A, u8(jumpMaxVel)),
-  ]}),
+  if_ugte(Reg8.A, u8(jumpMaxVel), {
+    then: [
+      LD(Reg8.A, u8(jumpMaxVel)),
+    ]
+  }),
 
   // Write it back
   LD(charProp(CharStruct.jumpAmount), Reg8.A),
@@ -126,9 +134,11 @@ const jumpPhysicsFalling = fn('jumpPhysicsFalling', () => [
   INC(Reg8.A),
 
   // Clamp to the max value
-  if_ugte(Reg8.A, u8(gravityMax), { then: [
-    LD(Reg8.A, u8(gravityMax)),
-  ]}),
+  if_ugte(Reg8.A, u8(gravityMax), {
+    then: [
+      LD(Reg8.A, u8(gravityMax)),
+    ]
+  }),
 
   // Write it back
   LD(charProp(CharStruct.gravity), Reg8.A),
@@ -142,24 +152,26 @@ const jumpPhysicsFalling = fn('jumpPhysicsFalling', () => [
   ADD(Reg8.A, Reg8.B),
 
   // Did the player hit the ground?
-  if_ugte(Reg8.A, u8(charGroundPos), { then: [
-    // Set the final y position
-    LD(Reg8.A, u8(charGroundPos)),
-    LD(addr(charShadowOAM + OAMStruct.y), Reg8.A),
+  if_ugte(Reg8.A, u8(charGroundPos), {
+    then: [
+      // Set the final y position
+      LD(Reg8.A, u8(charGroundPos)),
+      LD(addr(charShadowOAM + OAMStruct.y), Reg8.A),
 
-    // Set yVel to zero
-    XOR(Reg8.A, Reg8.A),
-    LD(charProp(CharStruct.yVel), Reg8.A),
+      // Set yVel to zero
+      XOR(Reg8.A, Reg8.A),
+      LD(charProp(CharStruct.yVel), Reg8.A),
 
-    // Set gravity to zero
-    LD(charProp(CharStruct.gravity), Reg8.A),
+      // Set gravity to zero
+      LD(charProp(CharStruct.gravity), Reg8.A),
 
-    // Return to the idle state
-    setCharState(CharJumpState.Idle),
+      // Return to the idle state
+      setCharState(CharJumpState.Idle),
 
-    // Early return
-    RET(),
-  ]}),
+      // Early return
+      RET(),
+    ]
+  }),
 ]);
 
 // void applyVelocity()
@@ -181,22 +193,12 @@ export const jumpPhysics = fn('jumpPhysics', () => [
   // Load state
   load_from_mem(Reg8.A, charProp(CharStruct.state)),
 
-  // Idle?
-  if_eq(Reg8.A, u8(CharJumpState.Idle), { then: [
-    CALL(jumpPhysicsIdle.start),
-  ], else: [
-    // Jumping?
-    if_eq(Reg8.A, u8(CharJumpState.Jumping), { then: [
-      CALL(jumpPhysicsJumping.start),
-    ], else: [
-      // Falling?
-      if_eq(Reg8.A, u8(CharJumpState.Falling), { then: [
-        CALL(jumpPhysicsFalling.start),
-      ], else: [
-        // Error!
-      ]})
-    ]})
-  ]}),
+  // Run the appropriate code for the state
+  switch_reg(Reg8.A, [
+    [u8(CharJumpState.Idle),    [ CALL(jumpPhysicsIdle.start)     ]],
+    [u8(CharJumpState.Jumping), [ CALL(jumpPhysicsJumping.start)  ]],
+    [u8(CharJumpState.Falling), [ CALL(jumpPhysicsFalling.start)  ]],
+  ]),
 
   // Apply velocity
   CALL(applyVelocity.start),

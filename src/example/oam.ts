@@ -1,15 +1,7 @@
 import { CALL, LD } from "../ops";
 import { Reg16Ptr, Reg8 } from "../types";
 import { addr, fn, inline, u8 } from "../utils";
-
-export enum OAMStruct {
-  y,
-  x,
-  tile,
-  flags,
-
-  Size,
-};
+import { OAMStruct } from "./structs";
 
 export const OAM_StartAddress  = addr(0xFE00);
 export const OAM_DMA_Address   = addr(0xFF46);
@@ -26,6 +18,7 @@ export const setOAMEntryValues = fn('setOAMEntryValues', () => [
   LD(Reg8.A, u8(2)),
   LD(Reg16Ptr.HLinc, Reg8.A),  // Flags
 ]);
+
 export const call_setOAMEntryValues = (y: number, x: number, tile: number) =>
   inline([
     LD(Reg8.A, u8(y)),

@@ -1,7 +1,7 @@
 import * as fsSync from 'fs';
 
-import { assemble } from "../assembler";
-import { LCDCF_BGON, LCDCF_ON, rBGP, rLCDC, rNR52, rOBP0 } from "../hardware-inc";
+import { assemble, CartridgeType, CGBFlag, RAMSize, ROMSize } from "../assembler";
+import { LCDCF_BGON, LCDCF_OBJOFF, LCDCF_ON, rBGP, rLCDC, rNR52, rOBP0 } from "../hardware-inc";
 import { ADD, CALL, DEC, JP, LD, XOR } from "../ops";
 import {
   AssemblerOperation,
@@ -37,25 +37,29 @@ label('program_setup'),
   XOR(Reg8.A, Reg8.A),
   LD(addr(rLCDC), Reg8.A),
 
-  // Copy tiles and tile maps
+  // Copy tiles
   call_memcpy(tiles.start, u16(0x8000), tiles.size),
   call_memcpy(tiles.start, u16(0x9000), tiles.size),
+
+  // Load the title screen tile map. This is stored in a compressed form in the ROM,
+  // and needs to be unpacked wth rleUnpack
   call_rleUnpack(titleMap.start, u16(0x9800), titleMap.size),
 
-  // Copy the DMA routine to HRAM
+  // Copy the DMA routine to HRAM. When performing DMA from shadow OAM to real OAM,
+  // the only memory allowed to be accessed is HRAM, so the routine needs to live there
   copyDMAToRAM(),
 
-  // Turn the LCD on
-  LD(Reg8.A, u8(LCDCF_ON | LCDCF_BGON)),
+  // Turn the LCD on, without objects (sprites) turned on.
+  LD(Reg8.A, u8(LCDCF_ON | LCDCF_BGON | LCDCF_OBJOFF)),
   LD(addr(rLCDC), Reg8.A),
 
   // During the first (blank) frame, initialize display registers
-  // Set up the background palette
+  // Set up the background palettes
   LD(Reg8.A, u8(0b11_10_01_00)),
   LD(addr(rBGP), Reg8.A),
   LD(addr(rOBP0), Reg8.A),
 
-  // Zero out all used RAM addresses
+  // Zero out all used RAM by default
   call_memset(u16(RAMStart), u8(0x00), u16(RAMLastUsed - RAMStart)),
 
   // Setup OAM values
@@ -99,7 +103,7 @@ label('program_setup'),
   LD(Reg16.HL, u16(charStruct)),
 
   LD(Reg8.A, u8(CharJumpState.Idle)),
-  LD(Reg16Ptr.HLinc, Reg8.A),  // state
+  LD(Reg16Ptr.HLinc, Reg8.A), // state
   XOR(Reg8.A, Reg8.A),
   LD(Reg16Ptr.HLinc, Reg8.A), // yVel
   LD(Reg16Ptr.HLinc, Reg8.A), // gravity
@@ -132,14 +136,17 @@ label('program_setup'),
   LD(Reg8.A, addr(0xCFFF)), // Read an uninitialised value from RAM
   LD(addr(rngIndex), Reg8.A),
 
-  call_waitForVBlank(),
-
 label('game_loop'),
+  // Update the game state
   CALL(mainGameStateMachine.start),
 
+  // Wait for a vertical blanking period
   call_waitForVBlank(),
 
+  // Copy shadow OAM to real OAM
   CALL(initiateDMA.start),
+
+  // Rinse and repeat!
   JP(label('game_loop')),
 
 // Functions ---------------------------------
@@ -165,10 +172,16 @@ label('game_loop'),
   rngTable.block,
 ];
 
-const result = assemble(program);
+// Assemble the ROM
+const result = assemble(program, {
+  title: "Block Jump LBP",
+});
 
-console.log(`\nAssembled ROM: ${result.finalOffset} / ${1<<15} bytes\n`);
+// Print utilisation data
+console.log(`\nAssembled ROM: ${result.finalOffset} / ${1<<15} bytes`);
+console.log(`RAM Usage: ${RAMLastUsed - RAMStart} / ${1<<13} bytes\n`)
 
+// Print RAM symbols
 for (const [name, value] of Object.entries(allRAMSymbols)) {
   console.log(`${name.padEnd(30, ' ')} 0x${value.toString(16).toUpperCase()}`)
 }
@@ -179,5 +192,6 @@ const ramSymbols = Object.entries(allRAMSymbols).map(([name, offset]) => {
 }).join('\n');
 const symFile = result.formattedSym + '\n' + ramSymbols;
 
+// Write ROM and symbol file to disk
 fsSync.writeFileSync('test.gb', result.buffer);
 fsSync.writeFileSync('test.sym', symFile);

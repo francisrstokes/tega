@@ -1,5 +1,14 @@
 // Actual addresses are defined (with space allocated) in ram.ts
 
+export enum OAMStruct {
+  y,
+  x,
+  tile,
+  flags,
+
+  Size,
+};
+
 export enum CharStruct {
   state = 0,
   yVel,
