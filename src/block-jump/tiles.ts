@@ -3,10 +3,12 @@ import * as fsSync from 'fs';
 import { block, inline, inlineBytes } from '../utils';
 import { runLengthEncodeTileData } from './rle';
 
-const tileData = fsSync.readFileSync(path.join(__dirname, 'tiledata.bin'));
-const titleMapData = runLengthEncodeTileData(fsSync.readFileSync(path.join(__dirname, 'titlemap.bin')));
-const tileMapData = runLengthEncodeTileData(fsSync.readFileSync(path.join(__dirname, 'map.bin')));
-const gameOverMapData = runLengthEncodeTileData(fsSync.readFileSync(path.join(__dirname, 'gameovermap.bin')));
+const basePath = path.join(__dirname, 'tiledata');
+
+const tileData = fsSync.readFileSync(path.join(basePath, 'tiledata.bin'));
+const titleMapData = runLengthEncodeTileData(fsSync.readFileSync(path.join(basePath, 'titlemap.bin')));
+const tileMapData = runLengthEncodeTileData(fsSync.readFileSync(path.join(basePath, 'map.bin')));
+const gameOverMapData = runLengthEncodeTileData(fsSync.readFileSync(path.join(basePath, 'gameovermap.bin')));
 
 export const tiles = block('Tiles', () => [inlineBytes(tileData)]);
 export const titleMap = block('TitleMap', () => [inlineBytes(titleMapData)]);
