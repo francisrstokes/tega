@@ -1,10 +1,10 @@
 import { AND, CALL, DEC, INC, JP, LD, OR, POP, PUSH, RES } from "../ops";
 import { Bit, Flag, Reg16, Reg16Ptr, Reg8, SymbolOr, U16Imm } from "../types";
-import { fn, inline, label, scope, u8 } from "../utils";
+import { fn, inline, label, u8, unnamedScope } from "../utils";
 
 // void rleUnpack(u16 de_source, u16 hl_dest, u16 bc_source_size)
 export const rleUnpack = fn('rleUnpack', ({ start }) => [
-  scope('rleUnpack', [
+  unnamedScope([
     // Load a byte from the source
     LD(Reg8.A, Reg16Ptr.DE),
 
@@ -82,7 +82,7 @@ export const rleUnpack = fn('rleUnpack', ({ start }) => [
 
     // While BC != 0, loop
     JP(Flag.NotZero, start),
-  ], true),
+  ]),
 ]);
 
 export const call_rleUnpack = (source: SymbolOr<U16Imm>, dest: SymbolOr<U16Imm>, size: SymbolOr<U16Imm>) =>

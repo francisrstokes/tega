@@ -1,20 +1,20 @@
 import { HRAM } from "../hardware-inc";
 import { DEC, JP, LD } from "../ops";
 import { Flag, Reg8 } from "../types";
-import { fn, inline, label, scope, u16, u8, virtualOffset } from "../utils";
+import { fn, inline, label, u16, u8, unnamedScope, virtualOffset } from "../utils";
 import { OAM_DMA_Address } from "./oam";
 import { shadowOAM } from "./ram";
 import { call_memcpy } from "../std";
 
 // void __attribute__((ram_function)) initiateDMA(void)
 export const initiateDMA = fn('initiateDMA', () => [
-  scope('initDMA', [
+  unnamedScope([
     LD(Reg8.A, u8(shadowOAM >> 8)),
     LD(OAM_DMA_Address, Reg8.A),
     label('wait'),
     DEC(Reg8.A),
     JP(Flag.NotZero, label('wait')),
-  ], true)
+  ])
 ]);
 
 export const copyDMAToRAM = () => call_memcpy(label('ROMInitiateDMAStart'), u16(HRAM), initiateDMA.size);

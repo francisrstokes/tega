@@ -1,7 +1,7 @@
 import { LCDCF_BGON, LCDCF_ON, rLCDC, rSCX } from "../hardware-inc";
 import { ADD, AND, CALL, DEC, INC, JP, LD, POP, PUSH, RET, SLA, XOR } from "../ops";
 import { Flag, Reg16, Reg16Ptr, Reg8 } from "../types";
-import { addr, block, fn, inline, inlineBytes, label, scope, u16, u8 } from "../utils";
+import { addr, block, fn, inline, inlineBytes, label, scope, u16, u8, unnamedScope } from "../utils";
 import { charGroundPos, charXPos } from "./physics";
 import { charShadowOAM, gameState, obstacle0, shadowOAM } from "./ram";
 import { getRandom } from "./rng";
@@ -57,7 +57,7 @@ export const setupObstacles = fn('setupObstacles', () => [
   // Align to the first obstacle entry in OAM, on the X property
   LD(Reg16.HL, u16(shadowOAM + OAMStruct.Size + OAMStruct.x)),
   LD(Reg8.C, u8(8)),
-  scope('setupObstacles', [
+  unnamedScope([
     label('loop'),
     XOR(Reg8.A, Reg8.A),
     LD(Reg16Ptr.HL, Reg8.A),
@@ -65,7 +65,7 @@ export const setupObstacles = fn('setupObstacles', () => [
     CALL(applyOffsetToHLPtr.start),
     DEC(Reg8.C),
     JP(Flag.NotZero, label('loop'))
-  ], true),
+  ]),
 ]);
 
 // void loadHLWithObstaclePropAddr(u16* de_base, u8 a_prop)
