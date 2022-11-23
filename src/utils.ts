@@ -136,6 +136,12 @@ export const scope = (name: string, ops: AssemblerOperation[], discardSymbols = 
   return inline(ops);
 }
 
+
+export const unnamedScope = (ops: AssemblerOperation[]) => {
+  const name = Math.random().toString(36).slice(2);
+  return scope(name, ops, true);
+}
+
 export type Block = {
   block: CompoundOperation;
   start: SymbolicLabel;
