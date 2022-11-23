@@ -8,7 +8,7 @@ import {
   SymbolicLabel,
   ByteArray,
   InlineBytes,
-  MoveTo,
+  OffsetControl,
   SizeOfReference,
   ImmediateKey,
   AssemblerOperation,
@@ -27,7 +27,7 @@ export const label = (value: string): SymbolicLabel => ({ type: 'symbolicLabel',
 export const inlineBytes = (bytes: ByteArray): InlineBytes => ({ type: 'inlineBytes', bytes });
 export const $addr = Object.freeze(label('$addr'));
 export const $inst = Object.freeze(label('$instructionAddr'));
-export const moveTo = (address: number): MoveTo => ({ type: 'moveTo', address });
+export const setOffset = (address: number): OffsetControl => ({ type: 'offsetControl', address });
 export const sizeOf = (symbolA: SymbolicLabel, symbolB: SymbolicLabel): SizeOfReference => ({
   type: 'sizeOfReference',
   symbolA,
@@ -104,7 +104,7 @@ export const scope = (name: string, ops: AssemblerOperation[], discardSymbols = 
 
         case "symbolicLabel":
         case "virtualOffsetControl":
-        case "moveTo":
+        case "offsetControl":
         case "inlineBytes": {
           // Do nothing
         } break;
@@ -123,7 +123,7 @@ export const scope = (name: string, ops: AssemblerOperation[], discardSymbols = 
 
         case "opDescription":
         case "virtualOffsetControl":
-        case "moveTo":
+        case "offsetControl":
         case "inlineBytes": {
           // Do nothing
         } break;

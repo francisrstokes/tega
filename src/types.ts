@@ -56,7 +56,7 @@ export type OpDescription =
 export type ByteArray = Uint8Array | Int8Array;
 
 export type InlineBytes = { type: 'inlineBytes', bytes: ByteArray; };
-export type MoveTo = { type: 'moveTo', address: number; };
+export type OffsetControl = { type: 'offsetControl', address: number; };
 export type CompoundOperation = { type: 'compound', operations: AssemblerOperation[]; };
 export type VirtualOffsetControl = { type: 'virtualOffsetControl', address: number, useROMOffset: boolean };
 
@@ -64,7 +64,7 @@ export type AssemblerOperation =
   | SymbolicLabel
   | OpDescription
   | InlineBytes
-  | MoveTo
+  | OffsetControl
   | VirtualOffsetControl
   | CompoundOperation;
 

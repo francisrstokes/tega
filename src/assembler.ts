@@ -125,7 +125,7 @@ const processOp = (
   state: AssemblerState
 ) => {
   switch (op.type) {
-    case "moveTo": {
+    case "offsetControl": {
       state.offset = op.address;
     } break;
 
