@@ -1,4 +1,5 @@
 import * as fsSync from 'fs';
+import * as path from 'path';
 
 import { assemble, CartridgeType, CGBFlag, RAMSize, ROMSize } from "../assembler";
 import { LCDCF_BGON, LCDCF_OBJOFF, LCDCF_ON, rBGP, rLCDC, rNR52, rOBP0 } from "../hardware-inc";
@@ -193,5 +194,7 @@ const ramSymbols = Object.entries(allRAMSymbols).map(([name, offset]) => {
 const symFile = result.formattedSym + '\n' + ramSymbols;
 
 // Write ROM and symbol file to disk
-fsSync.writeFileSync('test.gb', result.buffer);
-fsSync.writeFileSync('test.sym', symFile);
+const gameTitle = 'block-jump';
+const outputPath = path.join(__dirname, 'build');
+fsSync.writeFileSync(path.join(outputPath, `${gameTitle}.gb`), result.buffer);
+fsSync.writeFileSync(path.join(outputPath, `${gameTitle}.sym`), symFile);
