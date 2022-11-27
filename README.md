@@ -5,6 +5,22 @@
 
 It exposes a *type safe* API for all SM83 assembly instructions, defining inline bytes (in the form of TypedArrays), moving around in ROM space, and symbols, as well as definitions of the memory map layout, hardware registers and their important bitfield postitions (based on `hardware.inc`). It also provides facilities for creating *type safe* abstractions (macros) using all the regular language features of TS. This means that you can easily generate code using all of your favourite libraries like `lodash` and `ramda`.
 
+## A Game Example: Block Jump
+
+<img src="images/block-jump-1.png">
+<img src="images/block-jump-2.png">
+
+A full game example can be found in [`./src/block-jump`](./src/block-jump). This game is based on the *dinosaur jumping offline* game in google chrome, and features, amongst other things:
+
+- multiple modules
+- use of the "standard library"
+- random number generator strategies
+- tile map compression
+- physics and collision
+- virtual address offsetting
+
+There is a [video that goes into some depth](https://youtu.be/TIlx5nBnx-o) about `TEGA` and Block Jump on the Low Byte Productions YouTube channel.
+
 ## The Juicy Details
 
 `TEGA` generates the function definitions for all of the assembly operations automatically based on the [dmgops.json](https://github.com/izik1/gbops/blob/master/dmgops.json) file in [izik1's gbops repo](https://github.com/izik1/gbops). This file is used to generate the excellent [gbops website](https://izik1.github.io/gbops/), which provides a highly detailed opcode table for the GameBoy, with tons of useful information like cycles take per op, memory operation breakdown per cycle, etc. In `TEGA`, the only name of the operation and its opcode are needed to generate overloaded, type safe function definitions for each assembly instruction. For example, 40 overloads are generated for the `LD` instruction. If you're curious about the exact transformation from JSON to TypeScript, check out the [`scripts/ops-generator.ts`](scripts/ops-generator.ts) file this repo.

@@ -136,6 +136,12 @@ const toArgName = (argType: string, position: 'a' | 'b') => {
   }
 }
 
+const isAllReg8 = (regs: string[]) => {
+  const regsCopy = [...regs];
+  const asStr = regsCopy.sort().join('');
+  return asStr === 'ABCDEHL';
+}
+
 const instRegex = /^([A-Z]+)(?:\s(?:(.+),)?(.+)?)?$/g;
 const getInstructionParts = (instruction: string) => {
   let m;
@@ -212,6 +218,25 @@ const generateFunctions = (fnGroup: Record<string, [string[], number][]>, isPref
       mainFnLines.push('if (arguments.length === 2) {');
 
       const allowedArg0s = Object.keys(groupedByArg0);
+
+      // Check for special cases where we can have the most generic implementation
+      // e.g. LD(Reg8, Reg8)
+      if (argTypes[0] === 'reg8' && argTypes[1] === 'reg8') {
+        const arg0IsGeneric = isAllReg8(allowedArg0s);
+
+        if (arg0IsGeneric) {
+          const opsPerArg0 = groupedByArg0[allowedArg0s[0]];
+          const allowedArg1s = opsPerArg0.map(([parts]) => parts[2]);
+          const arg1IsGeneric = isAllReg8(allowedArg1s);
+          if (arg0IsGeneric && arg1IsGeneric) {
+            // emit a generic signature
+            const argA = toArgName('reg8', 'a');
+            const argB = toArgName('reg8', 'b');
+            signatures.push(`export function ${fnName}(${argA}: Reg8, ${argB}: Reg8): OpDescription;`);
+          }
+        }
+      }
+
       allowedArg0s.forEach(arg0 => {
         const opsPerArg0 = groupedByArg0[arg0];
         const allowedArg1s = opsPerArg0.map(([parts]) => parts[2]);
@@ -307,15 +332,17 @@ const typeImports = [
   '  SymbolOr,',
   '  U16Imm,',
   '  U16Ptr,',
-  '  U8Imm',
+  '  U8Imm,',
+  '  Reg8,',
   '} from "./types";',
   '',
 ].join('\n');
 
 const fns = [
   'const isSymbolRef = (x: string) => [',
-  '  "symbolReference",',
+  '  "symbolicLabel",',
   '  "sizeOfReference",',
+  '  "relativeToReference",',
   '].includes(x);',
   ''
 ].join('\n');

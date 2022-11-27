@@ -30,6 +30,15 @@ export const P1F_GET_DPAD = P1F_5;
 export const P1F_GET_BTN = P1F_4;
 export const P1F_GET_NONE = P1F_4 | P1F_5;
 
+export const BTN_DPAD_DOWN  = 0b1000;
+export const BTN_DPAD_UP    = 0b0100;
+export const BTN_DPAD_LEFT  = 0b0010;
+export const BTN_DPAD_RIGHT = 0b0001;
+export const BTN_START      = 0b1000;
+export const BTN_SELECT     = 0b0100;
+export const BTN_B          = 0b0010;
+export const BTN_A          = 0b0001;
+
 export const rLCDC = 0xFF40;
 export const LCDCF_OFF     = 0b00000000; // LCD Control Operation
 export const LCDCF_ON      = 0b10000000; // LCD Control Operation
@@ -49,6 +58,7 @@ export const LCDCF_BGOFF   = 0b00000000; // BG Display
 export const LCDCF_BGON    = 0b00000001; // BG Display
 
 export const rBGP = 0xFF47;
+export const rOBP0 = 0xFF48;
 
 export const rNR52 = 0xFF26;
 

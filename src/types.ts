@@ -21,15 +21,18 @@ export type ImmediateValue =
   | FFPageOffset
   | SPOffset;
 
-export type SymbolDefinition = { type: 'symbolDefinition', value: string; };
-export type BaseSymbolReference = { type: 'symbolReference', value: string; };
+export type SymbolicLabel = { type: 'symbolicLabel', value: string };
 export type SizeOfReference = {
   type: 'sizeOfReference';
-  symbolA: BaseSymbolReference;
-  symbolB: BaseSymbolReference;
+  symbolA: SymbolicLabel;
+  symbolB: SymbolicLabel;
 };
+export type RelativeToReference = {
+  type: 'relativeToReference';
+  symbol: SymbolicLabel;
+}
 
-export type SymbolReference = BaseSymbolReference | SizeOfReference;
+export type SymbolReference = SymbolicLabel | SizeOfReference | RelativeToReference;
 
 export type SymbolOr<T> = SymbolReference | T;
 
@@ -53,14 +56,16 @@ export type OpDescription =
 export type ByteArray = Uint8Array | Int8Array;
 
 export type InlineBytes = { type: 'inlineBytes', bytes: ByteArray; };
-export type MoveTo = { type: 'moveTo', address: number; };
+export type OffsetControl = { type: 'offsetControl', address: number; };
 export type CompoundOperation = { type: 'compound', operations: AssemblerOperation[]; };
+export type VirtualOffsetControl = { type: 'virtualOffsetControl', address: number, useROMOffset: boolean };
 
 export type AssemblerOperation =
-  | SymbolDefinition
+  | SymbolicLabel
   | OpDescription
   | InlineBytes
-  | MoveTo
+  | OffsetControl
+  | VirtualOffsetControl
   | CompoundOperation;
 
 export enum Reg8 {
@@ -84,8 +89,8 @@ export enum Reg16Ptr {
   BC       = '(BC)',
   DE       = '(DE)',
   HL       = '(HL)',
-  HLplus   = '(HL+)',
-  HLminus  = '(HL-)',
+  HLinc    = '(HL+)',
+  HLdec    = '(HL-)',
   SP       = '(SP)',
 };
 
@@ -106,5 +111,16 @@ export enum ResetOffset {
   x30 = '30h',
   x38 = '38h',
 };
+
+export enum Bit {
+  b0 = "0",
+  b1 = "1",
+  b2 = "2",
+  b3 = "3",
+  b4 = "4",
+  b5 = "5",
+  b6 = "6",
+  b7 = "7",
+}
 
 export type FF_PageC = '(FF00+C)';

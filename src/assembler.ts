@@ -44,7 +44,14 @@ const nintendoLogo = new Uint8Array([
 
 const stringToUint8Array = (s: string) => new Uint8Array(s.split('').map(c => c.charCodeAt(0)));
 
-type RevisitItem = { symbol: SymbolReference, offset: number, size: 1 | 2 };
+type RevisitItem = {
+  symbol: SymbolReference;
+  useVirtualOffset: boolean;
+  virtualOffset: number;
+  itemOffset: number;
+  itemSize: 1 | 2;
+  opcodeSize: 1 | 2;
+};
 type SymbolTable = Record<string, number>;
 type RevisitQueue = Array<RevisitItem>;
 type ResolutionResult = {
@@ -57,9 +64,10 @@ const reservedSymbols = ['$addr', '$instructionAddr'];
 const resolveSymbol = (
   symbol: SymbolOr<ImmediateValue>,
   symbols: SymbolTable,
-  offset: number
+  offset: number,
+  opcodeSize: number,
 ): ResolutionResult => {
-  if (symbol.type === 'symbolReference') {
+  if (symbol.type === 'symbolicLabel') {
     // Builtins
     switch (symbol.value) {
       case '$addr':             return { resolved: true, value: offset };
@@ -71,12 +79,18 @@ const resolveSymbol = (
       value: symbols[symbol.value] ?? 0
     };
   } else if (symbol.type === 'sizeOfReference') {
-    const a = resolveSymbol(symbol.symbolA, symbols, offset);
-    const b = resolveSymbol(symbol.symbolB, symbols, offset);
+    const a = resolveSymbol(symbol.symbolA, symbols, offset, opcodeSize);
+    const b = resolveSymbol(symbol.symbolB, symbols, offset, opcodeSize);
 
     return {
       resolved: a.resolved && b.resolved,
       value: b.value - a.value
+    };
+  } else if (symbol.type === 'relativeToReference') {
+    const symbolLoc = resolveSymbol(symbol.symbol, symbols, offset, opcodeSize);
+    return {
+      resolved: symbolLoc.resolved,
+      value: symbolLoc.value - offset - opcodeSize
     };
   } else {
     return {
@@ -100,27 +114,37 @@ const insertBytes = (
   }
 };
 
+const incrementOffset = (state: AssemblerState, amount = 1) => {
+  state.offset += amount;
+  state.virtualOffset += amount;
+}
+
 const processOp = (
   op: AssemblerOperation,
   buffer: Uint8Array,
-  offset: number,
-  symbols: SymbolTable,
-  revisit: RevisitQueue,
+  state: AssemblerState
 ) => {
   switch (op.type) {
-    case "moveTo": {
-      offset = op.address;
-      return offset;
-    }
+    case "offsetControl": {
+      state.offset = op.address;
+    } break;
+
+    case "virtualOffsetControl": {
+      if (op.useROMOffset) {
+        state.useVirtualOffset = false;
+      } else {
+        state.useVirtualOffset = true;
+        state.virtualOffset = op.address;
+      }
+    } break;
 
     case "inlineBytes": {
-      buffer.set(op.bytes, offset);
-      offset += op.bytes.byteLength;
-      return offset;
-    }
+      buffer.set(op.bytes, state.offset);
+      incrementOffset(state, op.bytes.byteLength);
+    } break;
 
-    case "symbolDefinition": {
-      if (op.value in symbols) {
+    case "symbolicLabel": {
+      if (op.value in state.symbols) {
         // TODO: Improve these errors with positional information
         throw new Error(`Symbol "${op.value}" has already been declared`);
       }
@@ -128,85 +152,125 @@ const processOp = (
         throw new Error(`Symbol "${op.value}" has reserved`);
       }
 
-      console.log(`${op.value}: 0x${offset.toString(16)}`);
+      const labelOffset = state.useVirtualOffset
+        ? state.virtualOffset
+        : state.offset;
 
-      symbols[op.value] = offset;
-      return offset;
-    }
+      if (!op.value.startsWith('__discard')) {
+        console.log(`${op.value.padEnd(30, ' ')} 0x${labelOffset.toString(16)}`);
+      }
+
+      state.symbols[op.value] = labelOffset;
+    } break;
 
     case "opDescription": {
+      let opcodeSize: RevisitItem["opcodeSize"] = 1;
       if (op.isPrefix) {
-        buffer[offset++] = 0xCB;
+        buffer[state.offset] = 0xCB;
+        incrementOffset(state);
+        opcodeSize = 2;
       }
-      buffer[offset++] = op.opcode;
+      buffer[state.offset] = op.opcode;
+      incrementOffset(state);
 
       // Can't figure out a straightforward way to group the one and two byte immediate resolutions
       // They only differ by key, the rest of the code block is the same.
 
+      const revisit: Omit<RevisitItem, 'symbol' | 'itemSize'> = {
+        itemOffset: state.offset,
+        virtualOffset: state.virtualOffset,
+        useVirtualOffset: state.useVirtualOffset,
+        opcodeSize,
+      };
+
       // One Byte immediates
       if ('u8' in op) {
-        revisit.push({ offset, size: 1, symbol: op.u8 as SymbolReference });
-        offset += 1;
+        state.revisit.push({ ...revisit, itemSize: 1, symbol: op.u8 as SymbolReference });
+        incrementOffset(state);
       } else if ('i8' in op) {
-        revisit.push({ offset, size: 1, symbol: op.i8 as SymbolReference });
-        offset += 1;
+        state.revisit.push({ ...revisit, itemSize: 1, symbol: op.i8 as SymbolReference });
+        incrementOffset(state);
       } else if ('ffPageOffset' in op) {
-        revisit.push({ offset, size: 1, symbol: op.ffPageOffset as SymbolReference });
-        offset += 1;
+        state.revisit.push({ ...revisit, itemSize: 1, symbol: op.ffPageOffset as SymbolReference });
+        incrementOffset(state);
       } else if ('spOffset' in op) {
-        revisit.push({ offset, size: 1, symbol: op.spOffset as SymbolReference });
-        offset += 1;
+        state.revisit.push({ ...revisit, itemSize: 1, symbol: op.spOffset as SymbolReference });
+        incrementOffset(state);
       }
       // Two Byte Immediates
       else if ('u16' in op) {
-        revisit.push({ offset, size: 2, symbol: op.u16 as SymbolReference });
-        offset += 2;
+        state.revisit.push({ ...revisit, itemSize: 2, symbol: op.u16 as SymbolReference });
+        incrementOffset(state, 2);
       } else if ('u16ptr' in op) {
-        revisit.push({ offset, size: 2, symbol: op.u16ptr as SymbolReference });
-        offset += 2;
+        state.revisit.push({ ...revisit, itemSize: 2, symbol: op.u16ptr as SymbolReference });
+        incrementOffset(state, 2);
       }
-
-      return offset;
-    }
+    } break;
 
     case "compound": {
       for (let compoundOp of op.operations) {
-        offset = processOp(compoundOp, buffer, offset, symbols, revisit);
+        processOp(compoundOp, buffer, state);
       }
-      return offset;
-    }
+    } break;
   }
 };
 
+const symbolsToSymFile = (symbols: SymbolTable) => {
+  // Format the symbol table to a .sym file
+  return Object.entries(symbols)
+  .filter(([name]) => !(name.startsWith('__discard') || name.endsWith('_end')))
+  .map(([name, offset]) => {
+    return `${offset.toString(16).padStart(4, '0')} ${name}`;
+  })
+  .join('\n');
+}
+
+type AssemblerState = {
+  revisit: RevisitQueue;
+  symbols: SymbolTable;
+  offset: number;
+  virtualOffset: number;
+  useVirtualOffset: boolean;
+}
 export const assemble = (ops: AssemblerOperation[], header: ROMHeader = {}) => {
   const ROMBuffer = new Uint8Array(0x8000); // Simple 32kb ROM only (for now)
 
-  const revisit: RevisitQueue = [];
-  const symbols: SymbolTable = {};
-  let offset = 0x150;
+  const state: AssemblerState = {
+    offset: 0x0150,
+    virtualOffset: 0x0000,
+    useVirtualOffset: false,
+    symbols: {},
+    revisit: [],
+  };
 
   for (let op of ops) {
-    offset = processOp(op, ROMBuffer, offset, symbols, revisit);
+    processOp(op, ROMBuffer, state);
   }
 
   // Resolve anything that wasn't found during the operations pass
-  for (const item of revisit) {
-    const result = resolveSymbol(item.symbol, symbols, item.offset);
+  for (const item of state.revisit) {
+    const offset = item.useVirtualOffset
+      ? item.virtualOffset
+      : item.itemOffset;
+
+    const result = resolveSymbol(item.symbol, state.symbols, offset, item.opcodeSize);
     if (!result.resolved) {
-      if (item.symbol.type === 'symbolReference') {
+      if (item.symbol.type === 'symbolicLabel') {
         throw new Error(`Unable to resolve symbol "${item.symbol.value}"`);
-      } else {
+      } else if (item.symbol.type === 'sizeOfReference') {
         const symbolA = item.symbol.symbolA.value;
         const symbolB = item.symbol.symbolB.value;
 
-        if (!(symbolA in symbols)) {
+        if (!(symbolA in state.symbols)) {
           throw new Error(`Unable to resolve symbol "${symbolA}"`);
         }
         throw new Error(`Unable to resolve symbol "${symbolB}"`);
+      } else if (item.symbol.type === 'relativeToReference') {
+        throw new Error(`Unable to resolve referenced relative symbol "${item.symbol.symbol.value}"`);
       }
     }
 
-    insertBytes(ROMBuffer, item.offset, result.value, item.size);
+    insertBytes(ROMBuffer, item.itemOffset, result.value, item.itemSize);
   }
 
   // JP $0150
@@ -232,10 +296,25 @@ export const assemble = (ops: AssemblerOperation[], header: ROMHeader = {}) => {
 
   // Global checksum calculation
   let checksum = 0;
-  for (let i = 0; i <= ROMBuffer.byteLength; i++) {
+  for (let i = 0; i < ROMBuffer.byteLength; i++) {
     checksum += ROMBuffer[i];
   }
-  insertBytes(ROMBuffer, 0x14F, checksum & 0xffff, 2);
+  checksum & 0xffff;
+  ROMBuffer[0x14E] = checksum >> 8;
+  ROMBuffer[0x14F] = checksum & 0xff;
 
-  return ROMBuffer;
+  // Remove discarded symbols
+  const symbolKeys = Object.keys(state.symbols).filter(key =>
+    key.includes('__discard')
+  );
+  for (const key of symbolKeys) {
+    delete state.symbols[key];
+  }
+
+  return {
+    buffer: ROMBuffer,
+    symbols: state.symbols,
+    formattedSym: symbolsToSymFile(state.symbols),
+    finalOffset: state.offset,
+  };
 };

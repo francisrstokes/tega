@@ -13,12 +13,14 @@ import {
   SymbolOr,
   U16Imm,
   U16Ptr,
-  U8Imm
+  U8Imm,
+  Reg8,
 } from "./types";
 
 const isSymbolRef = (x: string) => [
-  "symbolReference",
+  "symbolicLabel",
   "sizeOfReference",
+  "relativeToReference",
 ].includes(x);
 
 export function NOP(): OpDescription {
@@ -51,6 +53,7 @@ export function LD(r8a: 'E', r16ptrb: '(HL)'): OpDescription;
 export function LD(r8a: 'H', r16ptrb: '(HL)'): OpDescription;
 export function LD(r8a: 'L', r16ptrb: '(HL)'): OpDescription;
 export function LD(r16ptra: '(HL)', u8: SymbolOr<U8Imm>): OpDescription;
+export function LD(r8a: Reg8, r8b: Reg8): OpDescription;
 export function LD(r8a: 'B', r8b: 'B' | 'C' | 'D' | 'E' | 'H' | 'L' | 'A'): OpDescription;
 export function LD(r8a: 'C', r8b: 'B' | 'C' | 'D' | 'E' | 'H' | 'L' | 'A'): OpDescription;
 export function LD(r8a: 'D', r8b: 'B' | 'C' | 'D' | 'E' | 'H' | 'L' | 'A'): OpDescription;
