@@ -14,7 +14,8 @@ import {
   AssemblerOperation,
   CompoundOperation,
   RelativeToReference,
-  VirtualOffsetControl
+  VirtualOffsetControl,
+  AlignOffsetControl
 } from "./types";
 
 export const u8 = (value: number): U8Imm => ({ type: ImmediateKey.u8imm, value });
@@ -28,6 +29,7 @@ export const inlineBytes = (bytes: ByteArray): InlineBytes => ({ type: 'inlineBy
 export const $addr = Object.freeze(label('$addr'));
 export const $inst = Object.freeze(label('$instructionAddr'));
 export const setOffset = (address: number): OffsetControl => ({ type: 'offsetControl', address });
+export const alignOffset = (alignment: number): AlignOffsetControl => ({ type: 'alignOffsetControl', alignment });
 export const sizeOf = (symbolA: SymbolicLabel, symbolB: SymbolicLabel): SizeOfReference => ({
   type: 'sizeOfReference',
   symbolA,
@@ -103,6 +105,7 @@ export const scope = (name: string, ops: AssemblerOperation[], discardSymbols = 
         } break;
 
         case "symbolicLabel":
+        case "alignOffsetControl":
         case "virtualOffsetControl":
         case "offsetControl":
         case "inlineBytes": {
@@ -122,6 +125,7 @@ export const scope = (name: string, ops: AssemblerOperation[], discardSymbols = 
         } break;
 
         case "opDescription":
+        case "alignOffsetControl":
         case "virtualOffsetControl":
         case "offsetControl":
         case "inlineBytes": {
