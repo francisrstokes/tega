@@ -33,16 +33,18 @@ export type ROMHeader = {
   destinationCode?: DestinationCode;
   oldLicenseeCode?: number;
   maskROMVersion?: number;
+  useManualCartHeader?: boolean;
+  useManualChecksums?: boolean;
 };
 
 // Well, I definitely don't have the actual bytes stored in the source code
-const nintendoLogo = new Uint8Array([
+export const nintendoLogo = new Uint8Array([
   0x10, 0x33, 0xb8, 0xb8, 0x12, 0xd3, 0xde, 0xd5, 0xdd, 0xad, 0xde, 0x5d, 0xde, 0xd2, 0xde, 0xd3,
   0xde, 0xd6, 0xcf, 0xc1, 0x56, 0x57, 0xde, 0xd0, 0x02, 0x12, 0xb0, 0x38, 0x03, 0x03, 0x07, 0x47,
   0x65, 0x65, 0xb9, 0xbd, 0xb0, 0xd0, 0x32, 0x12, 0x03, 0x02, 0x47, 0x41, 0x65, 0x67, 0xed, 0xe0,
 ]).map(x => x ^ 0xDE);
 
-const stringToUint8Array = (s: string) => new Uint8Array(s.split('').map(c => c.charCodeAt(0)));
+export const stringToUint8Array = (s: string) => new Uint8Array(s.split('').map(c => c.charCodeAt(0)));
 
 type RevisitItem = {
   symbol: SymbolReference;
@@ -245,7 +247,7 @@ export const assemble = (ops: AssemblerOperation[], header: ROMHeader = {}) => {
   const ROMBuffer = new Uint8Array(0x8000); // Simple 32kb ROM only (for now)
 
   const state: AssemblerState = {
-    offset: 0x0150,
+    offset: header?.useManualCartHeader ? 0x0000 : 0x0150,
     virtualOffset: 0x0000,
     useVirtualOffset: false,
     symbols: {},
@@ -282,35 +284,39 @@ export const assemble = (ops: AssemblerOperation[], header: ROMHeader = {}) => {
     insertBytes(ROMBuffer, item.itemOffset, result.value, item.itemSize);
   }
 
-  // JP $0150
-  ROMBuffer.set(new Uint8Array([0xc3, 0x50, 0x01]), 0x100);
+  if (!header?.useManualCartHeader) {
+    // JP $0150
+    ROMBuffer.set(new Uint8Array([0xc3, 0x50, 0x01]), 0x100);
 
-  // Insert header information
-  ROMBuffer.set(nintendoLogo, 0x104);
-  ROMBuffer.set(stringToUint8Array(header.title ?? 'TEGA Generated'), 0x134);
-  ROMBuffer[0x143] = header.CGB ?? CGBFlag.NoSupport;
-  insertBytes(ROMBuffer, 0x144, header.newLicenseeCode ?? 0, 2);
-  ROMBuffer[0x146] = header.SGB ?? SGBFlag.NoSupport;
-  ROMBuffer[0x147] = header.cartridgeType ?? CartridgeType.ROMOnly;
-  ROMBuffer[0x148] = header.ROMSize ?? ROMSize.s32KB;
-  ROMBuffer[0x149] = header.RAMSize ?? RAMSize.sZero;
-  ROMBuffer[0x14A] = header.destinationCode ?? DestinationCode.NonJapanese;
-  ROMBuffer[0x14B] = header.SGB ? 0x33 : header.newLicenseeCode ?? 0;
-  ROMBuffer[0x14C] = header.maskROMVersion ?? 0;
-
-  // Checksum calculation for header
-  for (let i = 0x134; i <= 0x14c; i++) {
-    ROMBuffer[0x14D] = ROMBuffer[0x14D] - ROMBuffer[i] - 1;
+    // Insert header information
+    ROMBuffer.set(nintendoLogo, 0x104);
+    ROMBuffer.set(stringToUint8Array(header.title ?? 'TEGA Generated'), 0x134);
+    ROMBuffer[0x143] = header.CGB ?? CGBFlag.NoSupport;
+    insertBytes(ROMBuffer, 0x144, header.newLicenseeCode ?? 0, 2);
+    ROMBuffer[0x146] = header.SGB ?? SGBFlag.NoSupport;
+    ROMBuffer[0x147] = header.cartridgeType ?? CartridgeType.ROMOnly;
+    ROMBuffer[0x148] = header.ROMSize ?? ROMSize.s32KB;
+    ROMBuffer[0x149] = header.RAMSize ?? RAMSize.sZero;
+    ROMBuffer[0x14A] = header.destinationCode ?? DestinationCode.NonJapanese;
+    ROMBuffer[0x14B] = header.SGB ? 0x33 : header.newLicenseeCode ?? 0;
+    ROMBuffer[0x14C] = header.maskROMVersion ?? 0;
   }
 
-  // Global checksum calculation
-  let checksum = 0;
-  for (let i = 0; i < ROMBuffer.byteLength; i++) {
-    checksum += ROMBuffer[i];
+  if (!header?.useManualChecksums) {
+    // Checksum calculation for header
+    for (let i = 0x134; i <= 0x14c; i++) {
+      ROMBuffer[0x14D] = ROMBuffer[0x14D] - ROMBuffer[i] - 1;
+    }
+
+    // Global checksum calculation
+    let checksum = 0;
+    for (let i = 0; i < ROMBuffer.byteLength; i++) {
+      checksum += ROMBuffer[i];
+    }
+    checksum & 0xffff;
+    ROMBuffer[0x14E] = checksum >> 8;
+    ROMBuffer[0x14F] = checksum & 0xff;
   }
-  checksum & 0xffff;
-  ROMBuffer[0x14E] = checksum >> 8;
-  ROMBuffer[0x14F] = checksum & 0xff;
 
   // Remove discarded symbols
   const symbolKeys = Object.keys(state.symbols).filter(key =>
