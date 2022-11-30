@@ -119,6 +119,10 @@ const incrementOffset = (state: AssemblerState, amount = 1) => {
   state.virtualOffset += amount;
 }
 
+const alignTo = (offset: number, alignment: number) => {
+  return (offset - 1 + alignment) & -alignment;
+};
+
 const processOp = (
   op: AssemblerOperation,
   buffer: Uint8Array,
@@ -127,6 +131,11 @@ const processOp = (
   switch (op.type) {
     case "offsetControl": {
       state.offset = op.address;
+    } break;
+
+    case "alignOffsetControl": {
+      state.offset = alignTo(state.offset, op.alignment);
+      state.virtualOffset = alignTo(state.virtualOffset, op.alignment);
     } break;
 
     case "virtualOffsetControl": {

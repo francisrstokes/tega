@@ -59,6 +59,7 @@ export type InlineBytes = { type: 'inlineBytes', bytes: ByteArray; };
 export type OffsetControl = { type: 'offsetControl', address: number; };
 export type CompoundOperation = { type: 'compound', operations: AssemblerOperation[]; };
 export type VirtualOffsetControl = { type: 'virtualOffsetControl', address: number, useROMOffset: boolean };
+export type AlignOffsetControl = { type: 'alignOffsetControl', alignment: number };
 
 export type AssemblerOperation =
   | SymbolicLabel
@@ -66,6 +67,7 @@ export type AssemblerOperation =
   | InlineBytes
   | OffsetControl
   | VirtualOffsetControl
+  | AlignOffsetControl
   | CompoundOperation;
 
 export enum Reg8 {
