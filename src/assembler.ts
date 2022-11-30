@@ -1,4 +1,4 @@
-import { AssemblerOperation, ImmediateValue, SymbolOr, SymbolReference } from "./types";
+import { AssemblerOperation, ImmediateValue, SymbolicLabel, SymbolOr, SymbolReference } from "./types";
 
 export enum CGBFlag {
   NoSupport = 0x00,
@@ -35,6 +35,22 @@ export type ROMHeader = {
   maskROMVersion?: number;
   useManualCartHeader?: boolean;
   useManualChecksums?: boolean;
+};
+
+export type VectorTable = {
+  VBlank?: SymbolicLabel;
+  Stat?: SymbolicLabel;
+  Timer?: SymbolicLabel;
+  Serial?: SymbolicLabel;
+  Joypad?: SymbolicLabel;
+};
+
+const interruptVectorAddress: Record<keyof VectorTable, number> = {
+  VBlank: 0x0040,
+  Stat:   0x0048,
+  Timer:  0x0050,
+  Serial: 0x0058,
+  Joypad: 0x0060,
 };
 
 // Well, I definitely don't have the actual bytes stored in the source code
@@ -236,6 +252,8 @@ const symbolsToSymFile = (symbols: SymbolTable) => {
   .join('\n');
 }
 
+const unconditionalJumpBuffer = (address: number) => new Uint8Array([0xc3, (address & 0xff), (address >> 8)]);
+
 type AssemblerState = {
   revisit: RevisitQueue;
   symbols: SymbolTable;
@@ -243,7 +261,7 @@ type AssemblerState = {
   virtualOffset: number;
   useVirtualOffset: boolean;
 }
-export const assemble = (ops: AssemblerOperation[], header: ROMHeader = {}) => {
+export const assemble = (ops: AssemblerOperation[], header: ROMHeader = {}, vectorTable: VectorTable = {}) => {
   const ROMBuffer = new Uint8Array(0x8000); // Simple 32kb ROM only (for now)
 
   const state: AssemblerState = {
@@ -286,7 +304,7 @@ export const assemble = (ops: AssemblerOperation[], header: ROMHeader = {}) => {
 
   if (!header?.useManualCartHeader) {
     // JP $0150
-    ROMBuffer.set(new Uint8Array([0xc3, 0x50, 0x01]), 0x100);
+    ROMBuffer.set(unconditionalJumpBuffer(0x0150), 0x100);
 
     // Insert header information
     ROMBuffer.set(nintendoLogo, 0x104);
@@ -300,6 +318,17 @@ export const assemble = (ops: AssemblerOperation[], header: ROMHeader = {}) => {
     ROMBuffer[0x14A] = header.destinationCode ?? DestinationCode.NonJapanese;
     ROMBuffer[0x14B] = header.SGB ? 0x33 : header.newLicenseeCode ?? 0;
     ROMBuffer[0x14C] = header.maskROMVersion ?? 0;
+  }
+
+  for (const [vector, label] of Object.entries(vectorTable)) {
+    // Attempt to resolve the label value
+    const jumpAddress = resolveSymbol(label, state.symbols, 0, 0);
+    if (!jumpAddress.resolved) {
+      throw new Error(`Unable to interrupt vector [${vector}] symbol "${label.value}"`);
+    }
+
+    const vectorAddress = interruptVectorAddress[vector as keyof VectorTable];
+    ROMBuffer.set(unconditionalJumpBuffer(jumpAddress.value), vectorAddress);
   }
 
   if (!header?.useManualChecksums) {
