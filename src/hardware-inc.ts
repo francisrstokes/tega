@@ -68,3 +68,13 @@ export const rWY = 0xFF4A;
 export const rWX = 0xFF4B;
 export const rLY = 0xFF44;
 
+export const rSB = 0xFF01;
+export const rSC = 0xFF02;
+
+export const SCF_START  = 0b10000000; // Transfer Start Flag (1=Transfer in progress, or requested)
+export const SCF_SPEED  = 0b00000010; // Clock Speed (0=Normal, 1=Fast) ** CGB Mode Only **
+export const SCF_SOURCE = 0b00000001; // Shift Clock (0=External Clock, 1=Internal Clock)
+
+export const SCB_START  = 7;
+export const SCB_SPEED  = 1;
+export const SCB_SOURCE = 0;
