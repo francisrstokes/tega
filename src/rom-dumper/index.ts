@@ -23,7 +23,7 @@ const program: AssemblerOperation[] = [
   // Jump to the RAM code
   JP(dumpROM.start),
 
-// ----------------------------------
+  // ----------------------------------
 
   romDumperFunctions,
   memcpy.block,
@@ -33,4 +33,5 @@ const result = assemble(program, {
   title: ROM_NAME
 });
 
+fs.mkdirSync(BUILD_PATH, { recursive: true });
 fs.writeFileSync(path.join(BUILD_PATH, `${ROM_NAME}.gb`), result.buffer);
